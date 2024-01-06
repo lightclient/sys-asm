@@ -1,0 +1,12 @@
+#!/bin/bash
+set -euf -o pipefail
+
+SCRIPT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]:-$0}"; )" &> /dev/null && pwd 2> /dev/null; )";
+
+BYTECODE="$(eas "$SCRIPT_DIR/src/main.etk")"
+
+sed \
+    -e "s/@bytecode@/$BYTECODE/" \
+    "$SCRIPT_DIR/test/Contract.t.sol.in" > "$SCRIPT_DIR/test/Contract.t.sol"
+
+forge "$@" --evm-version shanghai
