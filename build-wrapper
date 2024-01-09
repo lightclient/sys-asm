@@ -3,10 +3,15 @@ set -euf -o pipefail
 
 SCRIPT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]:-$0}"; )" &> /dev/null && pwd 2> /dev/null; )";
 
-BYTECODE="$(geas "$SCRIPT_DIR/src/main.etk")"
+BYTECODE="$(geas "src/main.eas")"
+BYTECODE2="$(geas "src/fake_expo_test.eas")"
 
 sed \
     -e "s/@bytecode@/$BYTECODE/" \
+    "$SCRIPT_DIR/test/Contract.t.sol.in" > "$SCRIPT_DIR/test/Contract.t.sol"
+
+sed \
+    -e "s/@bytecode2@/$BYTECODE2/" \
     "$SCRIPT_DIR/test/Contract.t.sol.in" > "$SCRIPT_DIR/test/Contract.t.sol"
 
 forge "$@" --evm-version shanghai

@@ -4,13 +4,25 @@ pragma solidity ^0.8.13;
 import "forge-std/Test.sol";
 import "../src/Contract.sol";
 
+address constant addr = 0x000000000000000000000000000000000000aaaa;
+address constant fakeExpo = 0x000000000000000000000000000000000000BbBB;
+
 contract ContractTest is Test {
     address unit;
 
     function setUp() public {
-        vm.etch(addr, hex"@bytecode@");
+        // vm.etch(addr, hex"@bytecode@");
+        vm.etch(fakeExpo, hex"@bytecode2@");
         unit = addr;
     }
 
-    function testRead() public {}
+    function testFakeExpo() public {
+      bytes memory data = callFakeExpo(1, 100, 17);
+      assertEq(data, bytes.concat(bytes32(uint256(357))));
+    }
+}
+
+function callFakeExpo(int factor, int numerator, int denominator) returns (bytes memory) {
+      (, bytes memory data) = fakeExpo.call(bytes.concat(bytes32(uint256(factor)), bytes32(uint256(numerator)), bytes32(uint256(denominator))));
+      return data;
 }

@@ -1,0 +1,44 @@
+;; fake exponentiation 
+;; input = [factor, numerator, denominator]
+dup3      ;; [denominator, factor, numerator, denominator]
+mul       ;; [accum, numerator, denominator]
+push1 1   ;; [i, accum, numerator, denominator]
+swap1     ;; [accum, i, numerator, denominator]
+push0     ;; [output, accum, i, numerator, denominator]
+
+fake_exponential_loop:
+
+;; while accum > 0
+push0     ;; [0, output, accum, i, numerator, denominator]
+dup3      ;; [accum, 0, output, accum, i, numerator, denominator]
+gt        ;; [accum > 0, output, accum, i, numerator, denominator]
+iszero    ;; [!(accum > 0), output, accum, i, numerator, denominator]
+jumpi @finish_fake_exponential ;; [output, accum, i, numerator, denominator]
+
+;; output += accum
+dup2      ;; [accum, output, accum, i, numerator, denominator]
+add       ;; [output, accum, i, numerator, denominator]
+
+;; accum = (numerator_accum * numerator) // (denominator * i)
+swap1     ;; [accum, output, i, numerator, denominator]
+dup4      ;; [numerator, accum, output, i, numerator, denominator]
+mul       ;; [accum*numerator, output, i, numerator, denominator]
+
+dup5      ;; [denominator, accum*numerator, output, i, numerator, denominator]
+dup4      ;; [i, denominator, accum*numerator, output, i, numerator, denominator]
+mul       ;; [i*denominator, accum*numerator, output, i, numerator, denominator]
+swap1     ;; [accum*numerator, i*denominator, output, i, numerator, denominator]
+div       ;; [accum, output, i, numerator, denominator]
+
+swap2     ;; [i, output, accum, numerator, denominator]
+push1 1   ;; [1, i, output, accum, numerator, denominator]
+add       ;; [i, output, accum, numerator, denominator]
+swap2     ;; [accum, output, i, numerator, denominator]
+swap1     ;; [output, accum, i, numerator, denominator]
+jump @fake_exponential_loop
+
+finish_fake_exponential:
+swap1     ;; [accum, output, i, numerator, denominator]
+swap4     ;; [denominator, output, i, numerator, accum]
+swap1     ;; [output, denominator, i, numerator, accum]
+div       ;; [output / denominator, i , numerator, accum]
