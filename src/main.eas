@@ -1,5 +1,260 @@
-;; check exit fee
+#define EXCESS_EXITS_STORAGE_SLOT = 0
+#define EXIT_COUNT_STORAGE_SLOT = 1
 
-;; inc exit count
+#define EXIT_MESSAGE_QUEUE_HEAD_STORAGE_SLOT = 2
+#define EXIT_MESSAGE_QUEUE_TAIL_STORAGE_SLOT = 3
+#define EXIT_MESSAGE_QUEUE_STORAGE_OFFSET = 4
 
-;; return excess
+#define MIN_EXIT_FEE = 1
+#define TARGET_EXITS_PER_BLOCK = 2
+#define MAX_EXITS_PER_BLOCK = 16
+#define EXIT_FEE_UPDATE_FRACTION = 17
+
+#define SYSTEM_ADDR = 0xfffffffffffffffffffffffffffffffffffffffe
+
+start:
+  caller                ;; [caller]
+  push20 SYSTEM_ADDR    ;; [sysaddr, caller]
+  eq                    ;; [sysaddr == caller]
+  push1 @submit         ;; [submit_lbl, sysaddr == caller]
+  jumpi                 ;; []
+
+  ;; Verify the input is exactly 48 bytes, the size of a public key.
+  calldatasize          ;; [calldatasize]
+  push1 48              ;; [48, calldatasize]
+  eq                    ;; [48 == calldatasize]
+  iszero                ;; [48 != calldatasize]
+  jumpi @revert         ;; []
+
+  ;; Determine if the fee provided is enough to cover the exit fee.
+  push EXIT_FEE_UPDATE_FRACTION
+  push EXCESS_EXITS_STORAGE_SLOT
+  sload                 ;; [excess_exits, exit_fee_update_fraction]
+  push MIN_EXIT_FEE     ;; [min_exit_fee, excess_exits, exit_fee_update_fraction]
+  #include "fake_expo.eas"
+  callvalue             ;; [callvalue, exit_fee]
+  lt                    ;; [callvalue < exit_fee]
+  jumpi @revert         ;; []
+
+  ;; Exit can pay, increment exit count.
+  push EXIT_COUNT_STORAGE_SLOT ;; [exit_count_storage_slot]
+  sload                 ;; [exit_count]
+  push1 1               ;; [1, exit_count]
+  add                   ;; [exit_count+1]
+  push EXIT_COUNT_STORAGE_SLOT ;; [exit_count_storage_slot, exit_count+1]
+  sstore                ;; []
+
+  ;; Now insert exit into queue.
+  push EXIT_MESSAGE_QUEUE_TAIL_STORAGE_SLOT ;; [tail_idx_slot]
+  sload                 ;; [tail_idx]
+  dup1                  ;; [tail_idx, tail_idx]
+  push1 3               ;; [3, tail_idx, tail_idx]
+  mul                   ;; [3*tail_idx, tail_idx]
+  push EXIT_MESSAGE_QUEUE_STORAGE_OFFSET ;; [queue_offset, 3*tail_idx, tail_idx]
+  add                   ;; [slot, tail_idx]
+
+  caller                ;; [caller, slot, ..]
+  dup2                  ;; [slot, caller, slot, ..]
+  sstore                ;; [slot, ..]
+
+  push1 1               ;; [1, slot, ..]
+  add                   ;; [slot, ..]
+
+  push0                 ;; [0, slot, ..]
+  calldataload          ;; [pubkey[0:32], slot, ..]
+  dup2                  ;; [slot, pubkey[0:32], slot, ..]
+  sstore                ;; [slot, ..]
+
+  push1 1               ;; [1, slot, ..]
+  add                   ;; [slot, ..]
+
+  push1 32              ;; [32, slot, ..]
+  calldataload          ;; [pubkey[32:48], slot, ..]
+  swap1                 ;; [slot, pubkey[0:32], ..]
+  sstore                ;; [..]
+
+  push1 1               ;; [1, tail_idx]
+  add                   ;; [tail_idx+1]
+  push EXIT_MESSAGE_QUEUE_TAIL_STORAGE_SLOT ;; [tail_idx_slot]
+  sstore                ;; []
+
+  push0
+  push0
+  return
+
+;; Submit subroutine
+submit:
+  ;; 1) pull out exits until MAX_EXITS_PER_BLOCK
+  push EXIT_MESSAGE_QUEUE_TAIL_STORAGE_SLOT ;; [tail_idx_slot, head_idx, head_idx]
+  sload                   ;; [tail_idx]
+
+  push EXIT_MESSAGE_QUEUE_HEAD_STORAGE_SLOT ;; [head_idx_slot, tail_idx]
+  sload                   ;; [head_idx, tail_idx]
+  dup1                    ;; [head_idx, tail_idx]
+  dup2                    ;; [tail_idx, head_idx, tail_idx]
+  sub                     ;; [count, head_idx, tail_idx]
+  dup1                    ;; [count, count, head_idx, tail_idx]
+  push MAX_EXITS_PER_BLOCK ;; [exits_per_block, count, count, head_idx, tail_idx]
+  gt                      ;; [exits_per_block > count, count, head_idx, tail_idx]
+
+  jumpi @use_count        ;; [count, head_idx, tail_idx]
+
+  pop                     ;; [head_idx, tail_idx]
+  push MAX_EXITS_PER_BLOCK ;; [count, head_idx, tail_idx]
+
+use_count:
+  ;; loop through exits
+  push0                   ;; [i, count, head_idx, tail_idx]
+
+exit_accum_loop:
+  ;; Bounds check, ensure i < count.
+  dup2                    ;; [count, i, count, head_idx, tail_idx]
+  dup2                    ;; [i, count, i, count, head_idx, tail_idx]
+  eq                      ;; [i == count, i, count, head_idx, tail_idx]
+  jumpi @next             ;; [i, count, head_idx, tail_idx]
+
+  ;; Compute address offset for this iteration.
+  dup3                    ;; [head_idx, i, count, head_idx, tail_idx]
+  dup2                    ;; [i, head_idx, i, count, head_idx, tail_idx]
+  push 3                  ;; [3, i, head_idx, i, count, head_idx, tail_idx]
+  mul                     ;; [i*3, head_idx, i, count, head_idx, tail_idx]
+  add                     ;; [addr_offset, i, count, head_idx, tail_idx]
+
+  ;; Read address. 
+  dup1                    ;; [addr_offset, addr_offset, i, count, head_idx, tail_idx]
+  sload                   ;; [addr, addr_offset, i, count, head_idx, tail_idx]
+
+  ;; Compute pk[0:32] offset.
+  swap1                   ;; [addr_offset, addr, i, count, head_idx, tail_idx]
+  push 1                  ;; [1, addr_offset, addr, i, count, head_idx, tail_idx]
+  add                     ;; [pk1_offset, addr, i, count, head_idx, tail_idx]                    
+
+  ;; Read pk[0:32].
+  dup1                    ;; [pk1_offset, pk1_offset, addr, i, count, head_idx, tail_idx]
+  sload                   ;; [pk[0:32], pk1_offset, addr, i, count, head_idx, tail_idx]
+
+  ;; Compute pk[32:48] offset.
+  swap1                   ;; [pk1_offset, pk[0:32], addr, i, count, head_idx, tail_idx]
+  push 1                  ;; [1, pk1_offset, pk[0:32], addr, i, count, head_idx, tail_idx]
+  add                     ;; [pk2_offset, pk[0:32], addr, i, count, head_idx, tail_idx]
+
+  ;; Read pk[32:48]
+  sload                   ;; [pk[32:48], pk[0:32], addr, i, count, head_idx, tail_idx]
+
+  ;; Write values to memory flat and contiguously. This require combining the
+  ;; three storage elements (addr, pk[0:32], pk[32:48]) so that all the excess
+  ;; padding is in the third word.
+
+  ;; Compute and store first element: addr ++ pk[0:22]
+  swap2                   ;; [addr, pk[0:32], pk[32:48], i, ..]
+  push 12*8               ;; [96, addr, pk[0:32], pk[32:48], i, ..]
+  shl                     ;; [addr<<96, pk[0;32], pk[32:48], i, ..]
+  dup2                    ;; [pk[0:32], addr<<96, pk[0:32], pk[32:48], i, ..]
+  push 20*8               ;; [160, pk[0:32], addr<<96, pk[0:32], pk[32:48], i, ..]
+  shr                     ;; [pk[0:32]>>160, addr<<96, pk[0:32], pk[32:48], i, ..]
+  or                      ;; [first, pk[0:32], pk[32:48], i, ..]
+
+  dup4                    ;; [i, first, pk[0:32], pk[32:48], i, ..]
+  mstore                  ;; [pk[0:32], pk[32:48], i, ..]
+
+  ;; Compute and store second element: pk[22:44]
+  push 20*8               ;; [160, pk[0:32], pk[32:48], i, ..]
+  shl                     ;; [pk[0:32]<<160, pk[32:48], i, ..]
+  dup2                    ;; [pk[32:48], pk[0:32]<<96, pk[32:48], i, ..]
+  push 4*8                ;; [32, pk[32:48], pk[0:32]<<96, pk[32:48], i, ..]
+  shr                     ;; [pk[32:48]>>32, pk[0:32]<<96, pk[32:48], i, ..]
+  or                      ;; [second, pk[32:48], i, ..]]
+
+  dup4                    ;; [i, second, pk[32:48], i, ..]
+  push 1                  ;; [1, i, second, pk[32:48], i, ..]
+  add                     ;; [i+1, second, pk[32:48], i, ..]
+  mstore                  ;; [pk[32:48], i, ..]
+
+  ;; Compute and store third element: pk[44:48] (fully left aligned)
+  push4 0xfffffff         ;; [mask, pk[32:48], i, ..]
+  and                     ;; [pk[44:48], i, ..]
+  push 28*8               ;; [28, pk[44:48], i, ..]
+  shl                     ;; [third, i, ..]
+
+  dup2                    ;; [i, third, i, ..]
+  push 2                  ;; [2, i, third, i, ..]
+  add                     ;; [i+2, third, i, ..]
+  mstore                  ;; [i, ..]
+
+  ;; Increment i.
+  push 1                  ;; [1, i, count, head_idx, tail_idx]
+  add                     ;; [i+1, count, head_idx, tail_idx]
+
+  jump @exit_accum_loop   ;; [i, count, head_idx, tail_idx]
+
+;; 2) update queue head and index
+next:
+  pop                     ;; [count, head_idx, tail_idx]
+  swap1                   ;; [head_idx, count, tail_idx]
+  add                     ;; [new_head_idx, tail_idx]
+
+  dup1                    ;; [new_head_idx, new_head_idx, tail_idx]
+  swap2                   ;; [tail_idx, new_head_idx, new_head_idx]
+  eq                      ;; [new_head_idx == tail_idx, new_head_idx]
+  jumpi @reset_queue      ;; [new_head_idx]
+
+  push EXIT_MESSAGE_QUEUE_HEAD_STORAGE_SLOT ;; [head_idx_slot, new_head_idx]
+  sstore                  ;; []
+  jump @update_excess_exits ;; []
+
+reset_queue:
+  push0
+  push EXIT_MESSAGE_QUEUE_HEAD_STORAGE_SLOT
+  sstore
+  push0
+  push EXIT_MESSAGE_QUEUE_TAIL_STORAGE_SLOT
+  sstore
+
+;; 3) compute new excess exits
+update_excess_exits:
+  push EXCESS_EXITS_STORAGE_SLOT ;; [excess_exits_slot]
+  sload                   ;; [excess]
+  push EXIT_COUNT_STORAGE_SLOT   ;; [exit_count_slot, excess]
+  sload                   ;; [count, excess]
+
+  push TARGET_EXITS_PER_BLOCK ;; [target, count, excess]
+  dup3                    ;; [excess, target, count, excess]
+  dup3                    ;; [count, excess, target, count, excess]
+  add                     ;; [count+excess, target, count, excess]
+  gt                      ;; [count+excess > target, count, excess]
+  iszero                  ;; [count+excess <= target, count, excess]
+  jumpi @zero_excess_exits;; [count, excess]
+  add                     ;; [count+excess]
+  push TARGET_EXITS_PER_BLOCK
+  swap1                   ;; [count+excess, target]
+  sub                     ;; [new_excess]
+  push EXIT_COUNT_STORAGE_SLOT
+  sstore
+  jump @reset_exit_count
+
+zero_excess_exits:
+  push0
+  push EXIT_COUNT_STORAGE_SLOT
+  sstore
+
+;; 4) reset exit count
+reset_exit_count:
+  push EXIT_COUNT_STORAGE_SLOT
+  sload
+  push0
+  push EXIT_COUNT_STORAGE_SLOT
+  sstore
+
+
+;; 5) return the exits
+  push 96                 ;; [96, count]
+  mul                     ;; [size]
+  push0                   ;; [0, size]
+  return
+
+
+;; Revert subroutine.
+revert:
+  push0
+  push0
+  revert
