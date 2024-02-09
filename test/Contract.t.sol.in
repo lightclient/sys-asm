@@ -6,23 +6,133 @@ import "../src/Contract.sol";
 
 address constant addr = 0x000000000000000000000000000000000000aaaa;
 address constant fakeExpo = 0x000000000000000000000000000000000000BbBB;
+address constant testCaller = 0x000000000000000000000000000000000000CcCc;
+address constant sysaddr = 0xffffFFFfFFffffffffffffffFfFFFfffFFFfFFfE;
+
+
+uint256 constant excess_exits_slot = 0;
+uint256 constant exit_count_slot   = 1;
+uint256 constant queue_head_slot   = 2;
+uint256 constant queue_tail_slot   = 3;
+
+uint256 constant queue_storage_offset = 4;
+uint256 constant target_exits = 2;
 
 contract ContractTest is Test {
-    address unit;
+  address unit;
 
-    function setUp() public {
-        // vm.etch(addr, hex"@bytecode@");
-        vm.etch(fakeExpo, hex"@bytecode2@");
-        unit = addr;
+  function setUp() public {
+    vm.etch(addr, hex"@bytecode@");
+    vm.etch(fakeExpo, hex"@bytecode2@");
+    unit = addr;
+  }
+
+  function testFakeExpo() public {
+    bytes memory data = callFakeExpo(1, 100, 17);
+    assertEq(data, bytes.concat(bytes32(uint256(357))));
+  }
+
+  function testInvalidExit() public {
+    // pubkey too small
+    (bool ret,) = addr.call{value: 1e18}(hex"1234");
+    assertEq(ret, false);
+
+    // pubkey 47 bytes
+    (ret,) = addr.call{value: 1e18}(hex"0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000");
+    assertEq(ret, false);
+
+    // fee too small
+    (ret,) = addr.call{value: 0}(hex"000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000");
+    assertEq(ret, false);
+  }
+
+  function testValidExit() public {
+    (bool ret,) = addr.call{value: 2}(hex"111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111");
+    assertEq(ret, true);
+    assertStorage(exit_count_slot, 1);
+    assertStorage(excess_exits_slot, 0);
+  }
+
+  function testExcessExits() public {
+    for (uint i = 0; i < target_exits+1; i++) {
+      addExit(address(uint160(i+1)), makePubkey(i), 2);
     }
+    assertStorage(exit_count_slot, target_exits+1);
 
-    function testFakeExpo() public {
-      bytes memory data = callFakeExpo(1, 100, 17);
-      assertEq(data, bytes.concat(bytes32(uint256(357))));
+    bytes memory rawExits = getExits();
+    assertEq(rawExits.length, 3*68);
+    for (uint i = 0; i < target_exits+1; i++) {
+      uint offset = i*68;
+      assertEq(toFixed(rawExits, offset, offset+20) >> 96, uint256(i+1));
+      assertEq(toFixed(rawExits, offset+20, offset+52), toFixed(makePubkey(i), 0, 32));
+      assertEq(toFixed(rawExits, offset+52, offset+68), toFixed(makePubkey(i), 32, 48));
     }
-}
+  }
 
-function callFakeExpo(int factor, int numerator, int denominator) returns (bytes memory) {
-      (, bytes memory data) = fakeExpo.call(bytes.concat(bytes32(uint256(factor)), bytes32(uint256(numerator)), bytes32(uint256(denominator))));
-      return data;
+  // 1. insert a bunch of exits (to move excess exits ->)
+  // 2. read some, move queue
+  // 3. insert some more
+  // 4. read all, queue should reset
+  // 5. insert more
+  // 6. read all
+
+  function getExits() internal returns (bytes memory) {
+    vm.prank(sysaddr);
+    (bool ret, bytes memory data) = addr.call("");
+    assertEq(ret, true);
+    return data;
+  }
+
+  function addExit(address from, bytes memory pubkey, uint256 value) internal {
+    // Load tail index before adding exit.
+    uint256 exits = load(exit_count_slot);
+    uint256 tail = load(queue_tail_slot);
+
+    // Send exit from address.
+    vm.deal(from, value);
+    vm.prank(from);
+    (bool ret,) = addr.call{value: value}(pubkey);
+    assertEq(ret, true);
+
+    // Verify the queue data was updated correctly.
+    assertStorage(exit_count_slot, exits+1);
+    assertStorage(queue_tail_slot, tail+1);
+
+    // Verify the exit was written to the queue.
+    uint256 idx = queue_storage_offset+tail*3;
+    assertStorage(idx, uint256(uint160(from)));
+    assertStorage(idx+1, toFixed(pubkey, 0, 32));
+    assertStorage(idx+2, toFixed(pubkey, 32, 48));
+  }
+
+  function load(uint256 slot) internal view returns (uint256) {
+    return uint256(vm.load(addr, bytes32(slot)));
+  }
+
+  function assertStorage(uint256 slot, uint256 value) internal {
+    bytes32 got = vm.load(addr, bytes32(slot));
+    assertEq(got, bytes32(value));
+  }
+
+  function toFixed(bytes memory data, uint256 start, uint256 end) internal pure returns (uint256) {
+    require(end-start <= 32, "range cannot be larger than 32 bytes");
+    bytes memory out = new bytes(32);
+    for (uint256 i = start; i < end; i++) {
+      out[i-start] = data[i];
+    }
+    return uint256(bytes32(out));
+  }
+
+  function callFakeExpo(int factor, int numerator, int denominator) internal returns (bytes memory) {
+    (, bytes memory data) = fakeExpo.call(bytes.concat(bytes32(uint256(factor)), bytes32(uint256(numerator)), bytes32(uint256(denominator))));
+    return data;
+  }
+
+  function makePubkey(uint x) internal pure returns (bytes memory) {
+    bytes memory out = new bytes(48);
+    for (uint i = 0; i < 48; i++) {
+      out[i] = bytes1(uint8(x));
+    }
+    return out;
+  }
 }

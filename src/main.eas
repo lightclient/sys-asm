@@ -1,37 +1,44 @@
-#define EXCESS_EXITS_STORAGE_SLOT = 0
-#define EXIT_COUNT_STORAGE_SLOT = 1
+#define EXCESS_EXITS_STORAGE_SLOT 0
+#define EXIT_COUNT_STORAGE_SLOT 1
 
-#define EXIT_MESSAGE_QUEUE_HEAD_STORAGE_SLOT = 2
-#define EXIT_MESSAGE_QUEUE_TAIL_STORAGE_SLOT = 3
-#define EXIT_MESSAGE_QUEUE_STORAGE_OFFSET = 4
+#define EXIT_MESSAGE_QUEUE_HEAD_STORAGE_SLOT 2
+#define EXIT_MESSAGE_QUEUE_TAIL_STORAGE_SLOT 3
+#define EXIT_MESSAGE_QUEUE_STORAGE_OFFSET 4
 
-#define MIN_EXIT_FEE = 1
-#define TARGET_EXITS_PER_BLOCK = 2
-#define MAX_EXITS_PER_BLOCK = 16
-#define EXIT_FEE_UPDATE_FRACTION = 17
+#define MIN_EXIT_FEE 1
+#define TARGET_EXITS_PER_BLOCK 2
+#define MAX_EXITS_PER_BLOCK 16
+#define EXIT_FEE_UPDATE_FRACTION 17
 
-#define SYSTEM_ADDR = 0xfffffffffffffffffffffffffffffffffffffffe
+#define SYSTEM_ADDR 0xfffffffffffffffffffffffffffffffffffffffe
 
-start:
+.start:
   caller                ;; [caller]
   push20 SYSTEM_ADDR    ;; [sysaddr, caller]
   eq                    ;; [sysaddr == caller]
   push1 @submit         ;; [submit_lbl, sysaddr == caller]
   jumpi                 ;; []
 
-  ;; Verify the input is exactly 48 bytes, the size of a public key.
+  ;; Record new exit ~~
+  ;; This is the default code path. It will attempt to record a user's exit
+  ;; so long as they pay the required fee.
+  ;; ;; ;; ;;
+
+  ;; 1) Verify the input is exactly 48 bytes, the size of a public key.
   calldatasize          ;; [calldatasize]
   push1 48              ;; [48, calldatasize]
   eq                    ;; [48 == calldatasize]
   iszero                ;; [48 != calldatasize]
   jumpi @revert         ;; []
 
-  ;; Determine if the fee provided is enough to cover the exit fee.
+  ;; Compute the fee using fake expo and the current excess exits.
   push EXIT_FEE_UPDATE_FRACTION
   push EXCESS_EXITS_STORAGE_SLOT
   sload                 ;; [excess_exits, exit_fee_update_fraction]
   push MIN_EXIT_FEE     ;; [min_exit_fee, excess_exits, exit_fee_update_fraction]
   #include "fake_expo.eas"
+
+  ;; Determine if the fee provided is enough to cover the exit fee.
   callvalue             ;; [callvalue, exit_fee]
   lt                    ;; [callvalue < exit_fee]
   jumpi @revert         ;; []
@@ -91,7 +98,7 @@ submit:
   push EXIT_MESSAGE_QUEUE_HEAD_STORAGE_SLOT ;; [head_idx_slot, tail_idx]
   sload                   ;; [head_idx, tail_idx]
   dup1                    ;; [head_idx, tail_idx]
-  dup2                    ;; [tail_idx, head_idx, tail_idx]
+  dup3                    ;; [tail_idx, head_idx, head_idx, tail_idx]
   sub                     ;; [count, head_idx, tail_idx]
   dup1                    ;; [count, count, head_idx, tail_idx]
   push MAX_EXITS_PER_BLOCK ;; [exits_per_block, count, count, head_idx, tail_idx]
@@ -118,6 +125,8 @@ exit_accum_loop:
   dup2                    ;; [i, head_idx, i, count, head_idx, tail_idx]
   push 3                  ;; [3, i, head_idx, i, count, head_idx, tail_idx]
   mul                     ;; [i*3, head_idx, i, count, head_idx, tail_idx]
+  push EXIT_MESSAGE_QUEUE_STORAGE_OFFSET ;; [offset, i*3, head_idx, i, count, head_idx, tail_idx]
+  add                     ;; [offset+i*3, head_idx, i, count, head_idx, tail_idx]
   add                     ;; [addr_offset, i, count, head_idx, tail_idx]
 
   ;; Read address. 
@@ -145,7 +154,7 @@ exit_accum_loop:
   ;; three storage elements (addr, pk[0:32], pk[32:48]) so that all the excess
   ;; padding is in the third word.
 
-  ;; Compute and store first element: addr ++ pk[0:22]
+  ;; Compute and store first element: addr ++ pk[0:12]
   swap2                   ;; [addr, pk[0:32], pk[32:48], i, ..]
   push 12*8               ;; [96, addr, pk[0:32], pk[32:48], i, ..]
   shl                     ;; [addr<<96, pk[0;32], pk[32:48], i, ..]
@@ -155,29 +164,35 @@ exit_accum_loop:
   or                      ;; [first, pk[0:32], pk[32:48], i, ..]
 
   dup4                    ;; [i, first, pk[0:32], pk[32:48], i, ..]
+  push 68
+  mul
   mstore                  ;; [pk[0:32], pk[32:48], i, ..]
 
-  ;; Compute and store second element: pk[22:44]
-  push 20*8               ;; [160, pk[0:32], pk[32:48], i, ..]
-  shl                     ;; [pk[0:32]<<160, pk[32:48], i, ..]
+  ;; Compute and store second element: pk[12:44]
+  push 12*8               ;; [96, pk[0:32], pk[32:48], i, ..]
+  shl                     ;; [pk[0:32]<<96, pk[32:48], i, ..]
   dup2                    ;; [pk[32:48], pk[0:32]<<96, pk[32:48], i, ..]
-  push 4*8                ;; [32, pk[32:48], pk[0:32]<<96, pk[32:48], i, ..]
+  push 20*8               ;; [32, pk[32:48], pk[0:32]<<96, pk[32:48], i, ..]
   shr                     ;; [pk[32:48]>>32, pk[0:32]<<96, pk[32:48], i, ..]
   or                      ;; [second, pk[32:48], i, ..]]
 
-  dup4                    ;; [i, second, pk[32:48], i, ..]
-  push 1                  ;; [1, i, second, pk[32:48], i, ..]
+  dup3                    ;; [i, second, pk[32:48], i, ..]
+  push 68
+  mul
+  push 32                 ;; [1, i, second, pk[32:48], i, ..]
   add                     ;; [i+1, second, pk[32:48], i, ..]
   mstore                  ;; [pk[32:48], i, ..]
 
   ;; Compute and store third element: pk[44:48] (fully left aligned)
-  push4 0xfffffff         ;; [mask, pk[32:48], i, ..]
+  push 0x000000000000000000000000ffffffff00000000000000000000000000000000 ;; [mask, pk[32:48], i, ..]
   and                     ;; [pk[44:48], i, ..]
-  push 28*8               ;; [28, pk[44:48], i, ..]
+  push 12*8               ;; [12, pk[44:48], i, ..]
   shl                     ;; [third, i, ..]
 
   dup2                    ;; [i, third, i, ..]
-  push 2                  ;; [2, i, third, i, ..]
+  push 68
+  mul
+  push 64                 ;; [1, i, second, pk[32:48], i, ..]
   add                     ;; [i+2, third, i, ..]
   mstore                  ;; [i, ..]
 
@@ -228,13 +243,13 @@ update_excess_exits:
   push TARGET_EXITS_PER_BLOCK
   swap1                   ;; [count+excess, target]
   sub                     ;; [new_excess]
-  push EXIT_COUNT_STORAGE_SLOT
+  push EXCESS_EXITS_STORAGE_SLOT
   sstore
   jump @reset_exit_count
 
 zero_excess_exits:
   push0
-  push EXIT_COUNT_STORAGE_SLOT
+  push EXCESS_EXITS_STORAGE_SLOT
   sstore
 
 ;; 4) reset exit count
@@ -245,9 +260,8 @@ reset_exit_count:
   push EXIT_COUNT_STORAGE_SLOT
   sstore
 
-
 ;; 5) return the exits
-  push 96                 ;; [96, count]
+  push 68                 ;; [68, count]
   mul                     ;; [size]
   push0                   ;; [0, size]
   return

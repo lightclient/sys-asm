@@ -8,9 +8,6 @@ BYTECODE2="$(geas "src/fake_expo_test.eas")"
 
 sed \
     -e "s/@bytecode@/$BYTECODE/" \
-    "$SCRIPT_DIR/test/Contract.t.sol.in" > "$SCRIPT_DIR/test/Contract.t.sol"
-
-sed \
     -e "s/@bytecode2@/$BYTECODE2/" \
     "$SCRIPT_DIR/test/Contract.t.sol.in" > "$SCRIPT_DIR/test/Contract.t.sol"
 
