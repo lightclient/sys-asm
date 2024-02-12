@@ -10,7 +10,7 @@
 ;; using head and tail index pointers. After the queue is emptied, the pointers
 ;; are reset to zero.
 ;;
-;; Entrance to the queue is determined only by a calls ability to pay the
+;; Entrance to the queue is determined only by a call's ability to pay the
 ;; exponentially increasing fee. This fee is computed using a simple function
 ;; which approximates true exponential value. No verification of ownership is 
 ;; done by the pre-deploy or the execution layer. Only once the exits are being
