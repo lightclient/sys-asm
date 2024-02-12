@@ -9,7 +9,6 @@ address constant fakeExpo = 0x000000000000000000000000000000000000BbBB;
 address constant testCaller = 0x000000000000000000000000000000000000CcCc;
 address constant sysaddr = 0xffffFFFfFFffffffffffffffFfFFFfffFFFfFFfE;
 
-
 uint256 constant excess_exits_slot = 0;
 uint256 constant exit_count_slot   = 1;
 uint256 constant queue_head_slot   = 2;
@@ -17,6 +16,7 @@ uint256 constant queue_tail_slot   = 3;
 
 uint256 constant queue_storage_offset = 4;
 uint256 constant target_exits = 2;
+uint256 constant max_exits = 16;
 
 contract ContractTest is Test {
   address unit;
@@ -27,11 +27,13 @@ contract ContractTest is Test {
     unit = addr;
   }
 
+  // testFakeExpo calls the fake exponentiation logic with specific values.
   function testFakeExpo() public {
     bytes memory data = callFakeExpo(1, 100, 17);
     assertEq(data, bytes.concat(bytes32(uint256(357))));
   }
 
+  // testInvalidExit checks that common invalid exit submissions are rejected.
   function testInvalidExit() public {
     // pubkey too small
     (bool ret,) = addr.call{value: 1e18}(hex"1234");
@@ -46,43 +48,69 @@ contract ContractTest is Test {
     assertEq(ret, false);
   }
 
-  function testValidExit() public {
-    (bool ret,) = addr.call{value: 2}(hex"111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111");
+  // testExit verifies a single exit below the target exit count is accepted and
+  // read successfully.
+  function testExit() public {
+    bytes memory pk = hex"111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111";
+    (bool ret,) = addr.call{value: 2}(pk);
     assertEq(ret, true);
     assertStorage(exit_count_slot, 1);
     assertStorage(excess_exits_slot, 0);
+
+    bytes memory exit = getExits();
+    assertEq(exit.length, 68);
+    assertEq(toFixed(exit, 20, 52), toFixed(pk, 0, 32));
+    assertEq(toFixed(exit, 52, 68), toFixed(pk, 32, 48));
+    assertStorage(exit_count_slot, 0);
+    assertStorage(excess_exits_slot, 0);
   }
 
-  function testExcessExits() public {
-    for (uint i = 0; i < target_exits+1; i++) {
-      addExit(address(uint160(i+1)), makePubkey(i), 2);
+  // testQueueReset verifies that after a period of time where there are more
+  // exits than can be read per block, the queue is eventually cleared and the
+  // head and tails are reset to zero.
+  function testQueueReset() public {
+    // Add more exits than the max exits per block (16) so that the queue is not
+    // immediately emptied.
+    for (uint i = 0; i < max_exits+1; i++) {
+      addExit(address(uint160(i)), makePubkey(i), 2);
     }
-    assertStorage(exit_count_slot, target_exits+1);
+    assertStorage(exit_count_slot, max_exits+1);
 
-    bytes memory rawExits = getExits();
-    assertEq(rawExits.length, 3*68);
-    for (uint i = 0; i < target_exits+1; i++) {
-      uint offset = i*68;
-      assertEq(toFixed(rawExits, offset, offset+20) >> 96, uint256(i+1));
-      assertEq(toFixed(rawExits, offset+20, offset+52), toFixed(makePubkey(i), 0, 32));
-      assertEq(toFixed(rawExits, offset+52, offset+68), toFixed(makePubkey(i), 32, 48));
+    // Simulate syscall, check that max exits per block are read.
+    checkExits(0, max_exits);
+    assertStorage(excess_exits_slot, 15);
+
+    // Add another batch of max exits per block (16) so the next read leaves a
+    // single exit in the queue.
+    for (uint i = 17; i < 33; i++) {
+      addExit(address(uint160(i)), makePubkey(i), 2);
     }
+    assertStorage(exit_count_slot, max_exits);
+
+    // Simulate syscall. Verify first that max exits per block are read. Then
+    // verify only the single final exit is read.
+    checkExits(16, max_exits);
+    assertStorage(excess_exits_slot, 29);
+    checkExits(32, 1);
+    assertStorage(excess_exits_slot, 27);
+
+    // Now ensure the queue is empty and has reset to zero.
+    assertStorage(queue_head_slot, 0);
+    assertStorage(queue_tail_slot, 0);
+
+    // Add five (5) more exits to check that new exits can be added after the queue
+    // is reset.
+    for (uint i = 33; i < 38; i++) {
+      addExit(address(uint160(i)), makePubkey(i), 4);
+    }
+    assertStorage(exit_count_slot, 5);
+
+    // Simulate syscall, read only the max exits per block.
+    checkExits(33, 5);
+    assertStorage(excess_exits_slot, 30);
   }
 
-  // 1. insert a bunch of exits (to move excess exits ->)
-  // 2. read some, move queue
-  // 3. insert some more
-  // 4. read all, queue should reset
-  // 5. insert more
-  // 6. read all
-
-  function getExits() internal returns (bytes memory) {
-    vm.prank(sysaddr);
-    (bool ret, bytes memory data) = addr.call("");
-    assertEq(ret, true);
-    return data;
-  }
-
+  // addExit will submit an exit to the system contract with the given values.
   function addExit(address from, bytes memory pubkey, uint256 value) internal {
     // Load tail index before adding exit.
     uint256 exits = load(exit_count_slot);
@@ -105,6 +133,31 @@ contract ContractTest is Test {
     assertStorage(idx+2, toFixed(pubkey, 32, 48));
   }
 
+  // getExits will simulate a system call to the system contract.
+  function getExits() internal returns (bytes memory) {
+    vm.prank(sysaddr);
+    (bool ret, bytes memory data) = addr.call("");
+    assertEq(ret, true);
+    return data;
+  }
+
+  // checkExits will simulate a system call to the system contract and verify
+  // the expected exits are returned.
+  //
+  // It assumes that addresses are stored as uint256(index) and pubkeys are
+  // uint8(index), repeating.
+  function checkExits(uint startIndex, uint count) internal returns (uint) {
+    bytes memory exits = getExits();
+    assertEq(exits.length, count*68);
+    for (uint i = 0; i < count; i++) {
+      uint offset = i*68;
+      assertEq(toFixed(exits, offset, offset+20) >> 96, uint256(startIndex+i));
+      assertEq(toFixed(exits, offset+20, offset+52), toFixed(makePubkey(startIndex+i), 0, 32));
+      assertEq(toFixed(exits, offset+52, offset+68), toFixed(makePubkey(startIndex+i), 32, 48));
+    }
+    return count;
+  }
+
   function load(uint256 slot) internal view returns (uint256) {
     return uint256(vm.load(addr, bytes32(slot)));
   }
@@ -123,16 +176,16 @@ contract ContractTest is Test {
     return uint256(bytes32(out));
   }
 
-  function callFakeExpo(int factor, int numerator, int denominator) internal returns (bytes memory) {
-    (, bytes memory data) = fakeExpo.call(bytes.concat(bytes32(uint256(factor)), bytes32(uint256(numerator)), bytes32(uint256(denominator))));
-    return data;
-  }
-
   function makePubkey(uint x) internal pure returns (bytes memory) {
     bytes memory out = new bytes(48);
     for (uint i = 0; i < 48; i++) {
       out[i] = bytes1(uint8(x));
     }
     return out;
+  }
+
+  function callFakeExpo(int factor, int numerator, int denominator) internal returns (bytes memory) {
+    (, bytes memory data) = fakeExpo.call(bytes.concat(bytes32(uint256(factor)), bytes32(uint256(numerator)), bytes32(uint256(denominator))));
+    return data;
   }
 }
