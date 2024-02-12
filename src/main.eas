@@ -48,9 +48,9 @@
   push1 @read_exits     ;; [read_lbl, sysaddr == caller]
   jumpi                 ;; []
 
-  ;; -----------------------------------------------------------------------------
-  ;; USER SUBROUTINE -------------------------------------------------------------
-  ;; -----------------------------------------------------------------------------
+  ;; ---------------------------------------------------------------------------
+  ;; USER SUBROUTINE -----------------------------------------------------------
+  ;; ---------------------------------------------------------------------------
   ;;
   ;; Record new exit ~~
   ;; This is the default code path. It will attempt to record a user's exit
@@ -69,7 +69,6 @@
   push EXCESS_EXITS_STORAGE_SLOT
   sload                 ;; [excess_exits, exit_fee_update_fraction]
   push MIN_EXIT_FEE     ;; [min_exit_fee, excess_exits, exit_fee_update_fraction]
-
   #include "fake_expo.eas"
 
   ;; Determine if the fee provided is enough to cover the exit fee.
