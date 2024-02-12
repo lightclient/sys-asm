@@ -1,5 +1,6 @@
 ;; fake exponentiation 
-;; input = [factor, numerator, denominator]
+;; input stack = [factor, numerator, denominator]
+
 dup3      ;; [denominator, factor, numerator, denominator]
 mul       ;; [accum, numerator, denominator]
 push1 1   ;; [i, accum, numerator, denominator]

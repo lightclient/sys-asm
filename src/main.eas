@@ -1,3 +1,28 @@
+;; ███████╗ ██████╗  ██████╗ ██████╗   █████╗ ███████╗███╗   ███╗
+;; ╚════██║██╔═████╗██╔═████╗╚════██╗ ██╔══██╗██╔════╝████╗ ████║
+;;     ██╔╝██║██╔██║██║██╔██║ █████╔╝ ███████║███████╗██╔████╔██║
+;;    ██╔╝ ████╔╝██║████╔╝██║██╔═══╝  ██╔══██║╚════██║██║╚██╔╝██║
+;;    ██║  ╚██████╔╝╚██████╔╝███████╗ ██║  ██║███████║██║ ╚═╝ ██║
+;;    ╚═╝   ╚═════╝  ╚═════╝ ╚══════╝ ╚═╝  ╚═╝╚══════╝╚═╝     ╚═╝
+;;                                                              
+;; This is an implementation of EIP-7002's pre-deploy contract. It implements
+;; an unvalidated exit queue for beacon chain validators. The queue is tracked
+;; using head and tail index pointers. After the queue is emptied, the pointers
+;; are reset to zero.
+;;
+;; Entrance to the queue is determined only by a calls ability to pay the
+;; exponentially increasing fee. This fee is computed using a simple function
+;; which approximates true exponential value. No verification of ownership is 
+;; done by the pre-deploy or the execution layer. Only once the exits are being
+;; processed by the beacon chain is the validity verified. The fee is used to
+;; avoid spamming of the exit queue.
+
+;; -----------------------------------------------------------------------------
+;; CONSTANTS -------------------------------------------------------------------
+;; -----------------------------------------------------------------------------
+
+#define SYSTEM_ADDR 0xfffffffffffffffffffffffffffffffffffffffe
+
 #define EXCESS_EXITS_STORAGE_SLOT 0
 #define EXIT_COUNT_STORAGE_SLOT 1
 
@@ -10,15 +35,23 @@
 #define MAX_EXITS_PER_BLOCK 16
 #define EXIT_FEE_UPDATE_FRACTION 17
 
-#define SYSTEM_ADDR 0xfffffffffffffffffffffffffffffffffffffffe
+;; -----------------------------------------------------------------------------
+;; END CONSTANTS ---------------------------------------------------------------
+;; -----------------------------------------------------------------------------
 
 .start:
+  ;; Protect the system subroutine by checking if the caller is the system
+  ;; address. 
   caller                ;; [caller]
   push20 SYSTEM_ADDR    ;; [sysaddr, caller]
   eq                    ;; [sysaddr == caller]
-  push1 @submit         ;; [submit_lbl, sysaddr == caller]
+  push1 @read_exits     ;; [read_lbl, sysaddr == caller]
   jumpi                 ;; []
 
+  ;; -----------------------------------------------------------------------------
+  ;; USER SUBROUTINE -------------------------------------------------------------
+  ;; -----------------------------------------------------------------------------
+  ;;
   ;; Record new exit ~~
   ;; This is the default code path. It will attempt to record a user's exit
   ;; so long as they pay the required fee.
@@ -36,6 +69,7 @@
   push EXCESS_EXITS_STORAGE_SLOT
   sload                 ;; [excess_exits, exit_fee_update_fraction]
   push MIN_EXIT_FEE     ;; [min_exit_fee, excess_exits, exit_fee_update_fraction]
+
   #include "fake_expo.eas"
 
   ;; Determine if the fee provided is enough to cover the exit fee.
@@ -89,8 +123,10 @@
   push0
   return
 
-;; Submit subroutine
-submit:
+;; -----------------------------------------------------------------------------
+;; SYSTEM SUBROUTINE -----------------------------------------------------------
+;; -----------------------------------------------------------------------------
+read_exits:
   ;; 1) pull out exits until MAX_EXITS_PER_BLOCK
   push EXIT_MESSAGE_QUEUE_TAIL_STORAGE_SLOT ;; [tail_idx_slot, head_idx, head_idx]
   sload                   ;; [tail_idx]
@@ -267,7 +303,6 @@ reset_exit_count:
   mul                     ;; [size]
   push0                   ;; [0, size]
   return
-
 
 ;; Revert subroutine.
 revert:
