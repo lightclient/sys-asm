@@ -1,0 +1,2 @@
+*.sol.in linguist-language=Solidity
+*.eas linguist-language=asm
