@@ -59,6 +59,22 @@
   ;; so long as they pay the required fee.
   ;; ;; ;; ;;
 
+  ;; If calldatasize == 0, return the current excess exits.
+  calldatasize          ;; [calldatasize]
+  iszero                ;; [calldatasize == 0]
+  iszero                ;; [calldatasize != 0]
+  jumpi @check_input
+
+  ;; Load excess exits and return the value.
+  push EXCESS_EXITS     ;; [excess_exits_slot]
+  sload                 ;; [excess_exits]
+  push0                 ;; [0, excess_exits]
+  mstore                ;; []
+  push 32               ;; [32]
+  push 0                ;; [0, 32]
+  return                ;; []
+
+check_input:
   ;; Verify the input is exactly 48 bytes, the size of a public key.
   calldatasize          ;; [calldatasize]
   push1 48              ;; [48, calldatasize]
@@ -86,7 +102,7 @@
   push EXIT_COUNT
   sstore                ;; []
 
-  ;; Now insert exit into queue.
+  ;; Now insert exit into queue. First, compute the base storage slot
   push QUEUE_TAIL       ;; [tail_idx_slot]
   sload                 ;; [tail_idx]
   dup1                  ;; [tail_idx, tail_idx]
@@ -95,6 +111,7 @@
   push QUEUE_OFFSET
   add                   ;; [slot, tail_idx]
 
+  ;; Write address to queue.
   caller                ;; [caller, slot, ..]
   dup2                  ;; [slot, caller, slot, ..]
   sstore                ;; [slot, ..]
@@ -102,6 +119,7 @@
   push1 1               ;; [1, slot, ..]
   add                   ;; [slot, ..]
 
+  ;; Store pk[0:32] to queue.
   push0                 ;; [0, slot, ..]
   calldataload          ;; [pubkey[0:32], slot, ..]
   dup2                  ;; [slot, pubkey[0:32], slot, ..]
@@ -110,19 +128,19 @@
   push1 1               ;; [1, slot, ..]
   add                   ;; [slot, ..]
 
+  ;; Store pk[32:48] to queue.
   push1 32              ;; [32, slot, ..]
   calldataload          ;; [pubkey[32:48], slot, ..]
   swap1                 ;; [slot, pubkey[0:32], ..]
   sstore                ;; [..]
 
+  ;; Increment queue tail over last and write to storage.
   push1 1               ;; [1, tail_idx]
   add                   ;; [tail_idx+1]
   push QUEUE_TAIL       ;; [tail_idx_slot]
   sstore                ;; []
 
-  push0                 ;; [0]
-  push0                 ;; [0, 0]
-  return                ;; []
+  stop
 
 ;; -----------------------------------------------------------------------------
 ;; SYSTEM SUBROUTINE -----------------------------------------------------------

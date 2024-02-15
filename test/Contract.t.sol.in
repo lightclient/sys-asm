@@ -78,7 +78,7 @@ contract ContractTest is Test {
 
     // Simulate syscall, check that max exits per block are read.
     checkExits(0, max_exits);
-    assertStorage(excess_exits_slot, 15);
+    assertExcess(15);
 
     // Add another batch of max exits per block (16) so the next read leaves a
     // single exit in the queue.
@@ -90,9 +90,9 @@ contract ContractTest is Test {
     // Simulate syscall. Verify first that max exits per block are read. Then
     // verify only the single final exit is read.
     checkExits(16, max_exits);
-    assertStorage(excess_exits_slot, 29);
+    assertExcess(29);
     checkExits(32, 1);
-    assertStorage(excess_exits_slot, 27);
+    assertExcess(27);
 
     // Now ensure the queue is empty and has reset to zero.
     assertStorage(queue_head_slot, 0);
@@ -107,7 +107,7 @@ contract ContractTest is Test {
 
     // Simulate syscall, read only the max exits per block.
     checkExits(33, 5);
-    assertStorage(excess_exits_slot, 30);
+    assertExcess(30);
   }
 
   // addExit will submit an exit to the system contract with the given values.
@@ -165,6 +165,12 @@ contract ContractTest is Test {
   function assertStorage(uint256 slot, uint256 value) internal {
     bytes32 got = vm.load(addr, bytes32(slot));
     assertEq(got, bytes32(value));
+  }
+
+  function assertExcess(uint count) internal {
+    assertStorage(excess_exits_slot, count);
+    (, bytes memory data) = addr.call("");
+    assertEq(toFixed(data, 0, 32), count);
   }
 
   function toFixed(bytes memory data, uint256 start, uint256 end) internal pure returns (uint256) {
