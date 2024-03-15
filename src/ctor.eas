@@ -1,0 +1,11 @@
+push @.end - @.start
+dup1
+push @.start
+push0
+codecopy
+push0
+return
+
+.start:
+#include "main.eas"
+.end:
