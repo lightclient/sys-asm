@@ -70,7 +70,7 @@ contract ContractTest is Test {
   function testQueueReset() public {
     // Add more exits than the max exits per block (16) so that the queue is not
     // immediately emptied.
-    for (uint i = 0; i < max_exits+1; i++) {
+    for (uint256 i = 0; i < max_exits+1; i++) {
       addExit(address(uint160(i)), makePubkey(i), 2);
     }
     assertStorage(exit_count_slot, max_exits+1, "unexpected exit count");
@@ -81,7 +81,7 @@ contract ContractTest is Test {
 
     // Add another batch of max exits per block (16) so the next read leaves a
     // single exit in the queue.
-    for (uint i = 17; i < 33; i++) {
+    for (uint256 i = 17; i < 33; i++) {
       addExit(address(uint160(i)), makePubkey(i), 2);
     }
     assertStorage(exit_count_slot, max_exits, "unexpected exit count");
@@ -99,7 +99,7 @@ contract ContractTest is Test {
 
     // Add five (5) more exits to check that new exits can be added after the queue
     // is reset.
-    for (uint i = 33; i < 38; i++) {
+    for (uint256 i = 33; i < 38; i++) {
       addExit(address(uint160(i)), makePubkey(i), 4);
     }
     assertStorage(exit_count_slot, 5, "unexpected exit count");
@@ -113,8 +113,8 @@ contract ContractTest is Test {
   // testExitFee adds many exits, and verifies the exit fee decreases correctly
   // until it returns to 0.
   function testExitFee() public {
-    uint idx = 0;
-    uint count = max_exits*64;
+    uint256 idx = 0;
+    uint256 count = max_exits*64;
 
     // Add a bunch of exits.
     for (; idx < count; idx++) {
@@ -123,20 +123,20 @@ contract ContractTest is Test {
     assertStorage(exit_count_slot, count, "unexpected exit count");
     checkExits(0, max_exits);
 
-    uint read = max_exits;
-    uint excess = count - target_exits;
+    uint256 read = max_exits;
+    uint256 excess = count - target_exits;
 
     // Attempt to add an expect with fee too low and an exit with fee exactly
     // correct. This should cause the excess exits counter to decrease by 1 each
     // iteration.
-    for (uint i = 0; i < count; i++) {
+    for (uint256 i = 0; i < count; i++) {
       assertExcess(excess);
       
-      uint fee = computeExitFee(excess);
+      uint256 fee = computeExitFee(excess);
       addFailedExit(address(uint160(idx)), makePubkey(idx), fee-1);
       addExit(address(uint160(idx)), makePubkey(idx), fee);
 
-      uint expected = min(idx-read+1, max_exits);
+      uint256 expected = min(idx-read+1, max_exits);
       checkExits(read, expected);
 
       if (excess != 0) {
@@ -148,7 +148,7 @@ contract ContractTest is Test {
 
   }
 
-  function min(uint x, uint y) internal pure returns (uint) {
+  function min(uint256 x, uint256 y) internal pure returns (uint256) {
     if (x < y) {
       return x;
     }
@@ -198,11 +198,11 @@ contract ContractTest is Test {
   //
   // It assumes that addresses are stored as uint256(index) and pubkeys are
   // uint8(index), repeating.
-  function checkExits(uint startIndex, uint count) internal returns (uint) {
+  function checkExits(uint256 startIndex, uint256 count) internal returns (uint256) {
     bytes memory exits = getExits();
     assertEq(exits.length, count*68);
-    for (uint i = 0; i < count; i++) {
-      uint offset = i*68;
+    for (uint256 i = 0; i < count; i++) {
+      uint256 offset = i*68;
       assertEq(toFixed(exits, offset, offset+20) >> 96, uint256(startIndex+i), "unexpected exit value returned");
       assertEq(toFixed(exits, offset+20, offset+52), toFixed(makePubkey(startIndex+i), 0, 32), "unexpected exit value returned");
       assertEq(toFixed(exits, offset+52, offset+68), toFixed(makePubkey(startIndex+i), 32, 48), "unexpected exit value returned");
@@ -219,7 +219,7 @@ contract ContractTest is Test {
     assertEq(got, bytes32(value), err);
   }
 
-  function assertExcess(uint count) internal {
+  function assertExcess(uint256 count) internal {
     assertStorage(excess_exits_slot, count, "unexpected excess exits");
     (, bytes memory data) = addr.call("");
     assertEq(toFixed(data, 0, 32), count, "unexpected excess exits");
@@ -234,19 +234,19 @@ contract ContractTest is Test {
     return uint256(bytes32(out));
   }
 
-  function makePubkey(uint x) internal pure returns (bytes memory) {
+  function makePubkey(uint256 x) internal pure returns (bytes memory) {
     bytes memory out = new bytes(48);
-    for (uint i = 0; i < 48; i++) {
+    for (uint256 i = 0; i < 48; i++) {
       out[i] = bytes1(uint8(x));
     }
     return out;
   }
 
-  function computeExitFee(uint excess) internal returns (uint) {
+  function computeExitFee(uint256 excess) internal returns (uint256) {
     return callFakeExpo(1, int(excess), 17);
   }
 
-  function callFakeExpo(int factor, int numerator, int denominator) internal returns (uint) {
+  function callFakeExpo(int factor, int numerator, int denominator) internal returns (uint256) {
     (, bytes memory data) = fakeExpo.call(bytes.concat(bytes32(uint256(factor)), bytes32(uint256(numerator)), bytes32(uint256(denominator))));
     return toFixed(data, 0, 32);
   }
