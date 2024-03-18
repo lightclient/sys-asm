@@ -7,5 +7,5 @@ push0
 return
 
 .start:
-#include "main.eas"
+#assemble "main.eas"
 .end:
