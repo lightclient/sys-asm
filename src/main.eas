@@ -5,17 +5,17 @@
 ;;    ██║  ╚██████╔╝╚██████╔╝███████╗ ██║  ██║███████║██║ ╚═╝ ██║
 ;;    ╚═╝   ╚═════╝  ╚═════╝ ╚══════╝ ╚═╝  ╚═╝╚══════╝╚═╝     ╚═╝
 ;;                                                              
-;; This is an implementation of EIP-7002's pre-deploy contract. It implements
-;; an unvalidated exit queue for beacon chain validators. The queue is tracked
-;; using head and tail index pointers. After the queue is emptied, the pointers
-;; are reset to zero.
+;; This is an implementation of EIP-7002's pre-deploy contract. It implements an
+;; unvalidated withdrawal requests queue for beacon chain validators. The queue
+;; is tracked using head and tail index pointers. After the queue is emptied,
+;; the pointers are reset to zero.
 ;;
 ;; Entrance to the queue is determined only by a call's ability to pay the
 ;; exponentially increasing fee. This fee is computed using a simple function
-;; which approximates true exponential value. No verification of ownership is 
-;; done by the pre-deploy or the execution layer. Only once the exits are being
-;; processed by the beacon chain is the validity verified. The fee is used to
-;; avoid spamming of the exit queue.
+;; which approximates true exponential value. No verification of ownership is
+;; done by the pre-deploy or the execution layer. Only once the requests are
+;; being processed by the beacon chain is the validity verified. The fee is used
+;; to avoid spamming of the withdrawal requests queue.
 
 ;; -----------------------------------------------------------------------------
 ;; CONSTANTS -------------------------------------------------------------------
@@ -23,17 +23,17 @@
 
 #define SYSTEM_ADDR 0xfffffffffffffffffffffffffffffffffffffffe
 
-#define EXCESS_EXITS 0
-#define EXIT_COUNT 1
+#define SLOT_EXCESS 0
+#define SLOT_COUNT 1
+#define SLOT_TARGET 2
 
 #define QUEUE_HEAD 2
 #define QUEUE_TAIL 3
 #define QUEUE_OFFSET 4
 
-#define MIN_EXIT_FEE 1
-#define TARGET_EXITS 2
-#define MAX_EXITS 16
-#define EXIT_FEE_UPDATE_FRACTION 17
+#define MIN_FEE 1
+#define MAX_REQS 16
+#define FEE_UPDATE_FRACTION 17
 
 #define INPUT_SIZE 56   ;; the size of (pubkey ++ amount)
 #define RECORD_SIZE 76  ;; the size of (address ++ pubkey ++ amount)
@@ -45,30 +45,30 @@
 .start:
   ;; Protect the system subroutine by checking if the caller is the system
   ;; address. 
-  caller                ;; [caller]
-  push20 SYSTEM_ADDR    ;; [sysaddr, caller]
-  eq                    ;; [sysaddr == caller]
-  push1 @read_exits     ;; [read_lbl, sysaddr == caller]
-  jumpi                 ;; []
+  caller                        ;; [caller]
+  push20 SYSTEM_ADDR            ;; [sysaddr, caller]
+  eq                            ;; [sysaddr == caller]
+  push1 @read_withdraw_requests ;; [read_lbl, sysaddr == caller]
+  jumpi                         ;; []
 
   ;; ---------------------------------------------------------------------------
   ;; USER SUBROUTINE -----------------------------------------------------------
   ;; ---------------------------------------------------------------------------
   ;;
-  ;; Record new exit ~~
-  ;; This is the default code path. It will attempt to record a user's exit
+  ;; Record new withdrawal request ~~
+  ;; This is the default code path. It will attempt to record a user's request
   ;; so long as they pay the required fee.
 
-  ;; If calldatasize == 0, return the current excess exits.
+  ;; If calldatasize == 0, return the current excess withdrawal requests.
   calldatasize          ;; [calldatasize]
   iszero                ;; [calldatasize == 0]
   iszero                ;; [calldatasize != 0]
   jumpi @check_input
 
-  ;; Load excess exits and return the value.
-  push EXCESS_EXITS     ;; [excess_exits_slot]
-  sload                 ;; [excess_exits]
-  push0                 ;; [0, excess_exits]
+  ;; Load excess withdraw requests and return the value.
+  push SLOT_EXCESS      ;; [excess_reqs_slot]
+  sload                 ;; [excess_reqs]
+  push0                 ;; [0, excess_reqs]
   mstore                ;; []
   push 32               ;; [32]
   push 0                ;; [0, 32]
@@ -89,27 +89,27 @@ check_input:
   iszero                ;; [INPUT_SIZE != calldatasize]
   jumpi @revert         ;; []
 
-  ;; Compute the fee using fake expo and the current excess exits.
-  push EXIT_FEE_UPDATE_FRACTION
-  push EXCESS_EXITS
+  ;; Compute the fee using fake expo and the current excess withdraw requests.
+  push FEE_UPDATE_FRACTION
+  push SLOT_EXCESS      ;; [excess_slot, update_fraction]
   sload                 ;; [excess, update_fraction]
-  push MIN_EXIT_FEE     ;; [min_exit_fee, excess, update_fraction]
+  push MIN_FEE          ;; [min_fee, excess, update_fraction]
   #include "fake_expo.eas"
 
-  ;; Determine if the fee provided is enough to cover the exit fee.
-  callvalue             ;; [callvalue, exit_fee]
-  lt                    ;; [callvalue < exit_fee]
+  ;; Determine if the fee provided is enough to cover the withdraw request fee.
+  callvalue             ;; [callvalue, withdraw_request_fee]
+  lt                    ;; [callvalue < withdraw_request_fee]
   jumpi @revert         ;; []
 
-  ;; Exit can pay, increment exit count.
-  push EXIT_COUNT
-  sload                 ;; [exit_count]
-  push1 1               ;; [1, exit_count]
-  add                   ;; [exit_count+1]
-  push EXIT_COUNT
+  ;; The request can pay, increment withdraw request count.
+  push SLOT_COUNT
+  sload                 ;; [req_count]
+  push1 1               ;; [1, req_count]
+  add                   ;; [req_count+1]
+  push SLOT_COUNT
   sstore                ;; []
 
-  ;; Now insert exit into queue. First, compute the base storage slot
+  ;; Now insert request into queue. First, compute the base storage slot
   push QUEUE_TAIL       ;; [tail_idx_slot]
   sload                 ;; [tail_idx]
   dup1                  ;; [tail_idx, tail_idx]
@@ -153,26 +153,27 @@ check_input:
 ;; SYSTEM SUBROUTINE -----------------------------------------------------------
 ;; -----------------------------------------------------------------------------
 ;;
-;; Pop exits from queue, update fee accumulator ~~
-;; This is the logic executed by the protocol each block. It reads as many exits
-;; as available from the queue, until the max exits per block is reached. The
-;; exits are returned as a contiguous array of bytes with each record being
-;; exactly 76 bytes.
+;; Pop withdrawal request from queue, update fee accumulator ~~
+;; This is the logic executed by the protocol each block. It reads as many
+;; requests as available from the queue, until the max withdraw request per
+;; block is reached. The requests are returned as a contiguous array of bytes
+;; with each record being exactly 76 bytes.
 ;;
-;;  Exit record:
+;;  Withdraw request record:
 ;; 
 ;;  +------+--------+--------+
 ;;  | addr | pubkey | amount |
 ;;  +------+--------+--------+
 ;;     20      48        8
 ;;
-;; Because the exits are stored across three storage slots, there is some
+;; Because the requests are stored across three storage slots, there is some
 ;; shuffling to align the data.
 ;;
-;; After reading the exits, they are removed from the queue by modifying
-;; the queue's head index. The excess exits accumulator is updated so that
-;; the new cost of exiting is reflected. Finally, the exit count is reset.
-read_exits:
+;; After reading the withdrawal requests, they are removed from the queue by
+;; modifying the queue's head index. The excess requests accumulator is updated
+;; so that the new cost of requesting a withdrawal is reflected. Finally, the
+;; request count is reset.
+read_withdraw_requests:
   ;; Determine the size of the queue by calculating tail - head.
   push QUEUE_TAIL       ;; [tail_idx_slot, head_idx, head_idx]
   sload                 ;; [tail_idx]
@@ -184,21 +185,21 @@ read_exits:
   dup3                  ;; [tail_idx, head_idx, head_idx, tail_idx]
   sub                   ;; [count, head_idx, tail_idx]
 
-  ;; Determine if count is greater than the max exits.
+  ;; Determine if count is greater than the max withdraw requests.
   dup1                  ;; [count, count, head_idx, tail_idx]
-  push MAX_EXITS        ;; [exits_per_block, count, count, head_idx, tail_idx]
-  gt                    ;; [exits_per_block > count, count, head_idx, tail_idx]
+  push MAX_REQS         ;; [reqs_per_block, count, count, head_idx, tail_idx]
+  gt                    ;; [reqs_per_block > count, count, head_idx, tail_idx]
   jumpi @begin_loop     ;; [count, head_idx, tail_idx]
 
-  ;; Discard count, use the max exits per block.
+  ;; Discard count, use the max withdraw requests per block.
   pop                   ;; [head_idx, tail_idx]
-  push MAX_EXITS        ;; [count, head_idx, tail_idx]
+  push MAX_REQS         ;; [count, head_idx, tail_idx]
 
 begin_loop:
   push0                 ;; [i, count, head_idx, tail_idx]
 
 accum_loop:
-  ;; This loop will read each exit and byte bang it into a 76 byte chunk.
+  ;; This loop will read each request and byte bang it into a 76 byte chunk.
 
   ;; Bounds check, ensure i < count.
   dup2                  ;; [count, i, count, head_idx, tail_idx]
@@ -236,7 +237,7 @@ accum_loop:
   ;; Compute pk2_am offset and read it.
   swap1                 ;; [pk1_offset, pk[0:32], addr, record_offset, i, ..]
   push 1                ;; [1, pk1_offset, pk[0:32], addr, record_offset, i, ..]
-  add                   ;; [pk2_offset, pk[0:32], addr, record_offset, i, ..]
+  add                   ;; [pk2_am_offset, pk[0:32], addr, record_offset, i, ..]
   sload                 ;; [pk2_am, pk[0:32], addr, record_offset, i, ..]
 
   ;; Write values to memory flat and contiguously. This require combining the
@@ -289,8 +290,8 @@ accum_loop:
   jump @accum_loop      ;; [i, count, head_idx, tail_idx]
 
 update_head:
-  ;; All exits have been read, update queue by adding the count read to the
-  ;; current head index.
+  ;; All requests have been read, update queue by adding the count read.
+  to the current head index.
   swap2                 ;; [head_idx, count, count, tail_idx]
   add                   ;; [new_head_idx, count, tail_idx]
 
@@ -321,16 +322,16 @@ reset_queue:
   sstore                ;; [count]
 
 update_excess:
-  ;; Update the new excess exits.
-  push EXCESS_EXITS     ;; [excess_exits_slot, count]
+  ;; Update the new excess withdraw requests.
+  push SLOT_EXCESS      ;; [excess_slot, count]
   sload                 ;; [excess, count]
-  push EXIT_COUNT       ;; [exit_count_slot, excess, count]
+  push SLOT_COUNT       ;; [count_slot, excess, count]
   sload                 ;; [count, excess, count]
 
-  ;; If the sum of the previous excess exits and exits added in the current
-  ;; block is greater than the target, subtract the target from the sum and set
-  ;; it as the new excess exits value.
-  push TARGET_EXITS     ;; [target, count, excess, count]
+  ;; If the sum of the previous excess requests and requests added in the
+  ;; current block is greater than the target, subtract the target from the sum
+  ;; and set it as the new excess withdrawal requests value.
+  push SLOT_TARGET      ;; [target, count, excess, count]
   dup3                  ;; [excess, target, count, excess]
   dup3                  ;; [count, excess, target, count, excess, count]
   add                   ;; [count+excess, target, count, excess, count]
@@ -345,20 +346,20 @@ update_excess:
 
 compute_excess:
   add                   ;; [count+excess, count]
-  push TARGET_EXITS
+  push SLOT_TARGET
   swap1                 ;; [count+excess, target, count]
   sub                   ;; [new_excess, count]
 
 store_excess:
-  push EXCESS_EXITS     ;; [excess_slot, new_excess, count]
+  push SLOT_EXCESS      ;; [excess_slot, new_excess, count]
   sstore                ;; [count]
 
-  ;; Reset exit count.
+  ;; Reset withdraw request count.
   push0                 ;; [0, count]
-  push EXIT_COUNT       ;; [exit_count_slot, 0, count]
+  push SLOT_COUNT       ;; [count_slot, 0, count]
   sstore                ;; [count]
 
-  ;; Return the exits.
+  ;; Return the withdrawal requests.
   push RECORD_SIZE      ;; [record_size, count]
   mul                   ;; [size]
   push0                 ;; [0, size]
