@@ -35,7 +35,8 @@
 #define MAX_EXITS 16
 #define EXIT_FEE_UPDATE_FRACTION 17
 
-#define RECORD_SIZE 68
+#define INPUT_DATA_SIZE 56  ;; the size of (pubkey ++ amount)
+#define RECORD_SIZE 76      ;; the size of (address ++ pubkey ++ amount)
 
 ;; -----------------------------------------------------------------------------
 ;; PROGRAM START ---------------------------------------------------------------
@@ -75,11 +76,19 @@
   return                ;; []
 
 check_input:
-  ;; Verify the input is exactly 48 bytes, the size of a public key.
+  ;; Input data has the following layout:
+  ;;
+  ;;  +--------+--------+
+  ;;  | pubkey | amount |
+  ;;  +--------+--------+
+  ;;      48       8
+  ;;
+  ;; ;; ;; ;; ;;
+  ;; Verify the input is exactly 56 bytes.
   calldatasize          ;; [calldatasize]
-  push1 48              ;; [48, calldatasize]
-  eq                    ;; [48 == calldatasize]
-  iszero                ;; [48 != calldatasize]
+  push1 INPUT_DATA_SIZE ;; [INPUT_DATA_SIZE, calldatasize]
+  eq                    ;; [INPUT_DATA_SIZE == calldatasize]
+  iszero                ;; [INPUT_DATA_SIZE != calldatasize]
   jumpi @revert         ;; []
 
   ;; Compute the fee using fake expo and the current excess exits.
@@ -119,19 +128,19 @@ check_input:
   push1 1               ;; [1, slot, ..]
   add                   ;; [slot, ..]
 
-  ;; Store pk[0:32] to queue.
+  ;; Store pk_am[0:32] to queue.
   push0                 ;; [0, slot, ..]
-  calldataload          ;; [pubkey[0:32], slot, ..]
-  dup2                  ;; [slot, pubkey[0:32], slot, ..]
+  calldataload          ;; [pk_am[0:32], slot, ..]
+  dup2                  ;; [slot, pk_am[0:32], slot, ..]
   sstore                ;; [slot, ..]
 
   push1 1               ;; [1, slot, ..]
   add                   ;; [slot, ..]
 
-  ;; Store pk[32:48] to queue.
+  ;; Store pk_am[32:56] to queue.
   push1 32              ;; [32, slot, ..]
-  calldataload          ;; [pubkey[32:48], slot, ..]
-  swap1                 ;; [slot, pubkey[0:32], ..]
+  calldataload          ;; [pk_am[32:56], slot, ..]
+  swap1                 ;; [slot, pk_am[32:56], ..]
   sstore                ;; [..]
 
   ;; Increment queue tail over last and write to storage.
@@ -150,14 +159,14 @@ check_input:
 ;; This is the logic executed by the protocol each block. It reads as many exits
 ;; as available from the queue, until the max exits per block is reached. The
 ;; exits are returned as a contiguous array of bytes with each record being
-;; exactly 68 bytes.
+;; exactly 76 bytes.
 ;;
 ;;  Exit record:
 ;; 
-;;  +------+--------+
-;;  | addr | pubkey |
-;;  +------+--------+
-;;     20      48
+;;  +------+--------+--------+
+;;  | addr | pubkey | amount |
+;;  +------+--------+--------+
+;;     20      48        8
 ;;
 ;; Because the exits are stored across three storage slots, there is some
 ;; shuffling to align the data.
@@ -192,7 +201,7 @@ begin_loop:
   push0                 ;; [i, count, head_idx, tail_idx]
 
 accum_loop:
-  ;; This loop will read each exit and byte bang it into a 68 byte chunk.
+  ;; This loop will read each exit and byte bang it into a 76 byte chunk.
 
   ;; Bounds check, ensure i < count.
   dup2                  ;; [count, i, count, head_idx, tail_idx]
@@ -220,21 +229,21 @@ accum_loop:
   dup1                  ;; [addr_offset, addr_offset, record_offset, i, ..]
   sload                 ;; [addr, addr_offset, record_offset, i, ..]
 
-  ;; Compute pk[0:32] offset and read it.
+  ;; Compute pk_am[0:32] offset and read it.
   swap1                 ;; [addr_offset, addr, record_offset, i, ..]
   push 1                ;; [1, addr_offset, addr, record_offset, i, ..]
   add                   ;; [pk1_offset, addr, record_offset, i, ..]
   dup1                  ;; [pk1_offset, pk1_offset, addr, record_offset, i, ..]
-  sload                 ;; [pk[0:32], pk1_offset, addr, record_offset, i, ..]
+  sload                 ;; [pk_am[0:32], pk1_offset, addr, record_offset, i, ..]
 
-  ;; Compute pk[32:48] offset and read it.
-  swap1                 ;; [pk1_offset, pk[0:32], addr, record_offset, i, ..]
-  push 1                ;; [1, pk1_offset, pk[0:32], addr, record_offset, i, ..]
-  add                   ;; [pk2_offset, pk[0:32], addr, record_offset, i, ..]
-  sload                 ;; [pk[32:48], pk[0:32], addr, record_offset, i, ..]
+  ;; Compute pk_am[32:56] offset and read it.
+  swap1                 ;; [pk1_offset, pk_am[0:32], addr, record_offset, i, ..]
+  push 1                ;; [1, pk1_offset, pk_am[0:32], addr, record_offset, i, ..]
+  add                   ;; [pk2_offset, pk_am[0:32], addr, record_offset, i, ..]
+  sload                 ;; [pk_am[32:56], pk_am[0:32], addr, record_offset, i, ..]
 
   ;; Write values to memory flat and contiguously. This require combining the
-  ;; three storage elements (addr, pk[0:32], pk[32:48]) so there is no padding.
+  ;; three storage elements (addr, pk_am[0:32], pk_am[32:56]) so there is no padding.
   ;;  
   ;; Each stack element has the following layout:
   ;;
@@ -242,38 +251,38 @@ accum_loop:
   ;;  0x00 | 00 00 00 00 00 00 00 00 00 00 00 00 aa aa aa aa 
   ;;  0x10 | aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa
   ;; 
-  ;; B: pk[0:32]
+  ;; B: pk_am[0:32]
   ;;  0x00 | bb bb bb bb bb bb bb bb bb bb bb bb bb bb bb bb
   ;;  0x10 | bb bb bb bb bb bb bb bb bb bb bb bb bb bb bb bb
   ;;
-  ;; C: pk[32:48]
+  ;; C: pk_am[32:56]
   ;;  0x00 | cc cc cc cc cc cc cc cc cc cc cc cc cc cc cc cc
-  ;;  0x10 | 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  ;;  0x10 | cc cc cc cc cc cc cc cc 00 00 00 00 00 00 00 00
   ;;
   ;; To get these three stack elements into the correct contiguous format, it is
   ;; neccessary to combine them in the follow form:
   ;;
-  ;;  (A[12:32] ++ B[0:12], B[12:32] ++ C[0:12], C[12:16])
+  ;;  (A[12:32] ++ B[0:12], B[12:32] ++ C[0:12], C[12:24])
 
   ;; Shift addr bytes.
-  swap2                 ;; [addr, pk[0:32], pk[32:48], record_offset, i, ..]
-  push 12*8             ;; [96, addr, pk[0:32], pk[32:48], record_offset, i, ..]
-  shl                   ;; [addr<<96, pk[0:32], pk[32:48], record_offset, i, ..]
+  swap2                 ;; [addr, pk_am[0:32], pk_am[32:56], record_offset, i, ..]
+  push 12*8             ;; [96, addr, pk_am[0:32], pk_am[32:56], record_offset, i, ..]
+  shl                   ;; [addr<<96, pk_am[0:32], pk_am[32:56], record_offset, i, ..]
   
   ;; Store addr at offset = i*RECORD_SIZE.
-  dup4                  ;; [record_offset, addr<<96, pk[0:32], pk[32:48], record_offset, i, ..]
-  mstore                ;; [pk[0:32], pk[32:48], record_offset, i, ..]
+  dup4                  ;; [record_offset, addr<<96, pk_am[0:32], pk_am[32:56], record_offset, i, ..]
+  mstore                ;; [pk_am[0:32], pk_am[32:56], record_offset, i, ..]
 
-  ;; Store pk[0:32] at offset = i*RECORD_SIZE + 20.
-  dup3                  ;; [record_offset, pk[0:32], pk[32:48], record_offset, i, ..]
-  push 20               ;; [20, record_offset, pk[0:32], pk[32:48], record_offset, i, ..]
-  add                   ;; [record_offset+20, pk[0:32], pk[32:48], record_offset, i, ..]
-  mstore                ;; [pk[32:48], record_offset, i, ..]
+  ;; Store pk_am[0:32] at offset = i*RECORD_SIZE + 20.
+  dup3                  ;; [record_offset, pk_am[0:32], pk_am[32:56], record_offset, i, ..]
+  push 20               ;; [20, record_offset, pk_am[0:32], pk_am[32:56], record_offset, i, ..]
+  add                   ;; [record_offset+20, pk_am[0:32], pk_am[32:56], record_offset, i, ..]
+  mstore                ;; [pk_am[32:56], record_offset, i, ..]
 
-  ;; Store pk[32:48] at offset = i*RECORD_SIZE + 52.
-  swap1                 ;; [record_offset, pk[32:48], i, ..]
-  push 52               ;; [52, record_offset, pk[32:48], i, ..]
-  add                   ;; [record_offset+52, pk[32:48], i, ..]
+  ;; Store pk_am[32:56] at offset = i*RECORD_SIZE + 52.
+  swap1                 ;; [record_offset, pk_am[32:56], i, ..]
+  push 52               ;; [52, record_offset, pk_am[32:56], i, ..]
+  add                   ;; [record_offset+52, pk_am[32:56], i, ..]
   mstore                ;; [i, ..]
 
   ;; Increment i.
