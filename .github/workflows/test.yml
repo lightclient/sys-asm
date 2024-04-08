@@ -29,10 +29,10 @@ jobs:
       - name: Run Forge build
         run: |
           forge --version
-          forge build --sizes
+          ./build-wrapper build --sizes
         id: build
 
       - name: Run Forge tests
         run: |
-          forge test -vvv
+          ./build-wrapper test -vvv
         id: test
