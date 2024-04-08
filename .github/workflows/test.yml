@@ -21,6 +21,13 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Setup Go
+        uses: actions/setup-go@v4
+
+      - name: Install Geas
+        run: |
+          go install github.com/fjl/geas/cmd/geas@latest
+
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
