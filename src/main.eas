@@ -45,11 +45,11 @@
 .start:
   ;; Protect the system subroutine by checking if the caller is the system
   ;; address. 
-  caller                        ;; [caller]
-  push20 SYSTEM_ADDR            ;; [sysaddr, caller]
-  eq                            ;; [sysaddr == caller]
+  caller               ;; [caller]
+  push20 SYSTEM_ADDR   ;; [sysaddr, caller]
+  eq                   ;; [sysaddr == caller]
   push1 @read_requests ;; [read_lbl, sysaddr == caller]
-  jumpi                         ;; []
+  jumpi                ;; []
 
   ;; ---------------------------------------------------------------------------
   ;; USER SUBROUTINE -----------------------------------------------------------
