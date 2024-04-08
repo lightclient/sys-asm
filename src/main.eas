@@ -58,7 +58,6 @@
   ;; Record new exit ~~
   ;; This is the default code path. It will attempt to record a user's exit
   ;; so long as they pay the required fee.
-  ;; ;; ;; ;;
 
   ;; If calldatasize == 0, return the current excess exits.
   calldatasize          ;; [calldatasize]
@@ -82,8 +81,7 @@ check_input:
   ;;  | pubkey | amount |
   ;;  +--------+--------+
   ;;      48       8
-  ;;
-  ;; ;; ;; ;; ;;
+
   ;; Verify the input is exactly 56 bytes.
   calldatasize          ;; [calldatasize]
   push1 INPUT_SIZE      ;; [INPUT_SIZE, calldatasize]
@@ -174,7 +172,6 @@ check_input:
 ;; After reading the exits, they are removed from the queue by modifying
 ;; the queue's head index. The excess exits accumulator is updated so that
 ;; the new cost of exiting is reflected. Finally, the exit count is reset.
-;; ;; ;; ;; ;;
 read_exits:
   ;; Determine the size of the queue by calculating tail - head.
   push QUEUE_TAIL       ;; [tail_idx_slot, head_idx, head_idx]
