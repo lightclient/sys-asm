@@ -25,14 +25,14 @@
 
 #define SLOT_EXCESS 0
 #define SLOT_COUNT 1
-#define SLOT_TARGET 2
 
 #define QUEUE_HEAD 2
 #define QUEUE_TAIL 3
 #define QUEUE_OFFSET 4
 
 #define MIN_FEE 1
-#define MAX_REQS 16
+#define TARGET_PER_BLOCK 2
+#define MAX_PER_BLOCK 16
 #define FEE_UPDATE_FRACTION 17
 
 #define INPUT_SIZE 56   ;; the size of (pubkey ++ amount)
@@ -187,13 +187,13 @@ read_requests:
 
   ;; Determine if count is greater than the max withdrawal requests.
   dup1                  ;; [count, count, head_idx, tail_idx]
-  push MAX_REQS         ;; [reqs_per_block, count, count, head_idx, tail_idx]
+  push MAX_PER_BLOCK    ;; [reqs_per_block, count, count, head_idx, tail_idx]
   gt                    ;; [reqs_per_block > count, count, head_idx, tail_idx]
   jumpi @begin_loop     ;; [count, head_idx, tail_idx]
 
   ;; Discard count, use the max withdrawal requests per block.
   pop                   ;; [head_idx, tail_idx]
-  push MAX_REQS         ;; [count, head_idx, tail_idx]
+  push MAX_PER_BLOCK    ;; [count, head_idx, tail_idx]
 
 begin_loop:
   push0                 ;; [i, count, head_idx, tail_idx]
@@ -331,7 +331,7 @@ update_excess:
   ;; If the sum of the previous excess requests and requests added in the
   ;; current block is greater than the target, subtract the target from the sum
   ;; and set it as the new excess withdrawal requests value.
-  push SLOT_TARGET      ;; [target, count, excess, count]
+  push TARGET_PER_BLOCK ;; [target, count, excess, count]
   dup3                  ;; [excess, target, count, excess]
   dup3                  ;; [count, excess, target, count, excess, count]
   add                   ;; [count+excess, target, count, excess, count]
@@ -346,7 +346,7 @@ update_excess:
 
 compute_excess:
   add                   ;; [count+excess, count]
-  push SLOT_TARGET
+  push TARGET_PER_BLOCK ;; [target, count+excess, count]
   swap1                 ;; [count+excess, target, count]
   sub                   ;; [new_excess, count]
 
