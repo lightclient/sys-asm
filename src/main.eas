@@ -48,7 +48,7 @@
   caller                        ;; [caller]
   push20 SYSTEM_ADDR            ;; [sysaddr, caller]
   eq                            ;; [sysaddr == caller]
-  push1 @read_withdraw_requests ;; [read_lbl, sysaddr == caller]
+  push1 @read_requests ;; [read_lbl, sysaddr == caller]
   jumpi                         ;; []
 
   ;; ---------------------------------------------------------------------------
@@ -65,7 +65,7 @@
   iszero                ;; [calldatasize != 0]
   jumpi @check_input
 
-  ;; Load excess withdraw requests and return the value.
+  ;; Load excess withdrawal requests and return the value.
   push SLOT_EXCESS      ;; [excess_reqs_slot]
   sload                 ;; [excess_reqs]
   push0                 ;; [0, excess_reqs]
@@ -89,19 +89,19 @@ check_input:
   iszero                ;; [INPUT_SIZE != calldatasize]
   jumpi @revert         ;; []
 
-  ;; Compute the fee using fake expo and the current excess withdraw requests.
+  ;; Compute the fee using fake expo and the current excess withdrawal requests.
   push FEE_UPDATE_FRACTION
   push SLOT_EXCESS      ;; [excess_slot, update_fraction]
   sload                 ;; [excess, update_fraction]
   push MIN_FEE          ;; [min_fee, excess, update_fraction]
   #include "fake_expo.eas"
 
-  ;; Determine if the fee provided is enough to cover the withdraw request fee.
-  callvalue             ;; [callvalue, withdraw_request_fee]
-  lt                    ;; [callvalue < withdraw_request_fee]
+  ;; Determine if the fee provided is enough to cover the withdrawal request fee.
+  callvalue             ;; [callvalue, req_fee]
+  lt                    ;; [callvalue < req_fee]
   jumpi @revert         ;; []
 
-  ;; The request can pay, increment withdraw request count.
+  ;; The request can pay, increment withdrawal request count.
   push SLOT_COUNT
   sload                 ;; [req_count]
   push1 1               ;; [1, req_count]
@@ -155,11 +155,11 @@ check_input:
 ;;
 ;; Pop withdrawal request from queue, update fee accumulator ~~
 ;; This is the logic executed by the protocol each block. It reads as many
-;; requests as available from the queue, until the max withdraw request per
+;; requests as available from the queue, until the max withdrawal request per
 ;; block is reached. The requests are returned as a contiguous array of bytes
 ;; with each record being exactly 76 bytes.
 ;;
-;;  Withdraw request record:
+;;  Withdrawal request record:
 ;; 
 ;;  +------+--------+--------+
 ;;  | addr | pubkey | amount |
@@ -173,7 +173,7 @@ check_input:
 ;; modifying the queue's head index. The excess requests accumulator is updated
 ;; so that the new cost of requesting a withdrawal is reflected. Finally, the
 ;; request count is reset.
-read_withdraw_requests:
+read_requests:
   ;; Determine the size of the queue by calculating tail - head.
   push QUEUE_TAIL       ;; [tail_idx_slot, head_idx, head_idx]
   sload                 ;; [tail_idx]
@@ -185,13 +185,13 @@ read_withdraw_requests:
   dup3                  ;; [tail_idx, head_idx, head_idx, tail_idx]
   sub                   ;; [count, head_idx, tail_idx]
 
-  ;; Determine if count is greater than the max withdraw requests.
+  ;; Determine if count is greater than the max withdrawal requests.
   dup1                  ;; [count, count, head_idx, tail_idx]
   push MAX_REQS         ;; [reqs_per_block, count, count, head_idx, tail_idx]
   gt                    ;; [reqs_per_block > count, count, head_idx, tail_idx]
   jumpi @begin_loop     ;; [count, head_idx, tail_idx]
 
-  ;; Discard count, use the max withdraw requests per block.
+  ;; Discard count, use the max withdrawal requests per block.
   pop                   ;; [head_idx, tail_idx]
   push MAX_REQS         ;; [count, head_idx, tail_idx]
 
@@ -291,7 +291,7 @@ accum_loop:
 
 update_head:
   ;; All requests have been read, update queue by adding the count read.
-  to the current head index.
+  ;; to the current head index.
   swap2                 ;; [head_idx, count, count, tail_idx]
   add                   ;; [new_head_idx, count, tail_idx]
 
@@ -322,7 +322,7 @@ reset_queue:
   sstore                ;; [count]
 
 update_excess:
-  ;; Update the new excess withdraw requests.
+  ;; Update the new excess withdrawal requests.
   push SLOT_EXCESS      ;; [excess_slot, count]
   sload                 ;; [excess, count]
   push SLOT_COUNT       ;; [count_slot, excess, count]
@@ -354,7 +354,7 @@ store_excess:
   push SLOT_EXCESS      ;; [excess_slot, new_excess, count]
   sstore                ;; [count]
 
-  ;; Reset withdraw request count.
+  ;; Reset withdrawal request count.
   push0                 ;; [0, count]
   push SLOT_COUNT       ;; [count_slot, 0, count]
   sstore                ;; [count]
