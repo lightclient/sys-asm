@@ -147,6 +147,24 @@ contract ContractTest is Test {
 
   }
 
+  // testInhibitorRest verifies that after the first system call the excess
+  // value is reset to 0.
+  function testInhibitorReset() public {
+    vm.store(addr, bytes32(0), bytes32(uint256(1181)));
+    vm.prank(sysaddr);
+    (bool ret, bytes memory data) = addr.call("");
+    assertStorage(excess_slot, 0, "expected excess requests to be reset");
+
+    vm.store(addr, bytes32(0), bytes32(uint256(1180)));
+    vm.prank(sysaddr);
+    (ret, data) = addr.call("");
+    assertStorage(excess_slot, 1180-target_per_block, "didn't expect excess to be reset");
+  }
+
+  // --------------------------------------------------------------------------
+  // helpers ------------------------------------------------------------------
+  // --------------------------------------------------------------------------
+
   function min(uint256 x, uint256 y) internal pure returns (uint256) {
     if (x < y) {
       return x;

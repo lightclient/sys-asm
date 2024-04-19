@@ -325,6 +325,19 @@ update_excess:
   ;; Update the new excess withdrawal requests.
   push SLOT_EXCESS      ;; [excess_slot, count]
   sload                 ;; [excess, count]
+  
+  ;; Check if excess needs to be reset to 0 for first iteration after
+  ;; activation.
+  dup1                  ;; [excess, excess, count, count]
+  push 1181             ;; [1181, excess, excess, count, count]
+  eq                    ;; [1181 == excess, excess, count, count]
+  iszero                ;; [1181 != excess, excess, count, count]
+  jumpi @skip_reset     ;; [excess, count, count]
+
+  pop                   ;; [count, count]
+  push0                 ;; [reset_excess, count]
+
+skip_reset:
   push SLOT_COUNT       ;; [count_slot, excess, count]
   sload                 ;; [count, excess, count]
 
