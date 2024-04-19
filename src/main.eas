@@ -34,7 +34,7 @@
 #define TARGET_PER_BLOCK 2
 #define MAX_PER_BLOCK 16
 #define FEE_UPDATE_FRACTION 17
-#define EXCESS_INHIBITOR = 1181
+#define EXCESS_INHIBITOR 1181
 
 #define INPUT_SIZE 56   ;; the size of (pubkey ++ amount)
 #define RECORD_SIZE 76  ;; the size of (address ++ pubkey ++ amount)
