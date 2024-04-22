@@ -34,6 +34,7 @@
 #define TARGET_PER_BLOCK 2
 #define MAX_PER_BLOCK 16
 #define FEE_UPDATE_FRACTION 17
+#define EXCESS_INHIBITOR 1181
 
 #define INPUT_SIZE 56   ;; the size of (pubkey ++ amount)
 #define RECORD_SIZE 76  ;; the size of (address ++ pubkey ++ amount)
@@ -325,6 +326,20 @@ update_excess:
   ;; Update the new excess withdrawal requests.
   push SLOT_EXCESS      ;; [excess_slot, count]
   sload                 ;; [excess, count]
+  
+  ;; Check if excess needs to be reset to 0 for first iteration after
+  ;; activation.
+  dup1                  ;; [excess, excess, count, count]
+  push EXCESS_INHIBITOR ;; [inhibitor, excess, excess, count, count]
+  eq                    ;; [inhibitor == excess, excess, count, count]
+  iszero                ;; [inhibitor != excess, excess, count, count]
+  jumpi @skip_reset     ;; [excess, count, count]
+
+  ;; Drop the excess from storage and use 0.
+  pop                   ;; [count, count]
+  push0                 ;; [reset_excess, count]
+
+skip_reset:
   push SLOT_COUNT       ;; [count_slot, excess, count]
   sload                 ;; [count, excess, count]
 
