@@ -261,7 +261,7 @@ contract ContractTest is Test {
     }
     // amount
     for (uint256 i = 0; i < 8; i++) {
-      out[i] = bytes1(uint8(x+1));
+      out[48 + i] = bytes1(uint8(x+1));
     }
 
     return out;
