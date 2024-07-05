@@ -1,6 +1,8 @@
-# `7002asm`
+# `sys-asm`
 
-This is a [`geas`][geas] implementation of the [EIP-7002][7002] system contract.
+This repository stores [`geas`][geas] implementations of Ethereum's system
+contracts, such as the ones associated with [EIP-7002][7002] and
+[EIP-7251][7251].
 
 ## Getting Started
 
@@ -15,7 +17,7 @@ $ go install github.com/fjl/geas/cmd/geas@latest
 
 ## Building
 
-To assemble `src/main.eas` you will need to invoke `geas`:
+To assemble `src/withdrawals/main.eas` you will need to invoke `geas`:
 
 ```console
 $ geas src/main.eas
@@ -46,5 +48,6 @@ Ran 1 test suites: 5 tests passed, 0 failed, 0 skipped (5 total tests)
 
 [geas]: https://github.com/fjl/geas
 [7002]: https://eips.ethereum.org/EIPS/eip-7002
+[7251]: https://eips.ethereum.org/EIPS/eip-7251
 [foundry]: https://getfoundry.sh/
 [forge]: https://github.com/foundry-rs/foundry/blob/master/forge
