@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import "./TestHelper.sol";
+import "./Test.sol";
 
 uint256 constant target_per_block = 1;
 uint256 constant max_per_block = 1;
 
-contract ConsolidationTest is TestHelper {
+contract ConsolidationTest is Test {
 
   function setUp() public {
     vm.etch(addr, hex"@bytecode@");
@@ -28,9 +28,9 @@ contract ConsolidationTest is TestHelper {
     assertEq(ret, false);
   }
 
-  // testRequest verifies a single request below the target request
-  // count is accepted and read successfully.
-  function testRequest() public {
+  // testConsolidation verifies a single consolidation request below the target
+  // request count is accepted and read successfully.
+  function testConsolidation() public {
     bytes memory data = hex"111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222";
     (bool ret,) = addr.call{value: 2}(data);
     assertEq(ret, true);
@@ -53,26 +53,26 @@ contract ConsolidationTest is TestHelper {
     // Add more requests than the max per block (1) so that the queue is not
     // immediately emptied.
     for (uint256 i = 0; i < max_per_block+1; i++) {
-      addRequest(address(uint160(i)), makeRequest(i), 2);
+      addRequest(address(uint160(i)), makeConsolidation(i), 2);
     }
     assertStorage(count_slot, max_per_block+1, "unexpected request count");
 
     // Simulate syscall, check that max requests per block are read.
-    checkRequests(0, max_per_block);
+    checkConsolidations(0, max_per_block);
     assertExcess(1);
 
     // Add another batch of max requests per block (1) so the next read leaves a
     // single request in the queue.
     for (uint256 i = 2; i < 3; i++) {
-      addRequest(address(uint160(i)), makeRequest(i), 2);
+      addRequest(address(uint160(i)), makeConsolidation(i), 2);
     }
     assertStorage(count_slot, max_per_block, "unexpected request count");
 
     // Simulate syscall. Verify first that max per block are read. Then
     // verify only the single final requst is read.
-    checkRequests(1, max_per_block);
+    checkConsolidations(1, max_per_block);
     assertExcess(1);
-    checkRequests(2, 1);
+    checkConsolidations(2, 1);
     assertExcess(0);
 
     // Now ensure the queue is empty and has reset to zero.
@@ -82,12 +82,12 @@ contract ConsolidationTest is TestHelper {
     // Add five (5) more requests to check that new requests can be added after the queue
     // is reset.
     for (uint256 i = 3; i < 8; i++) {
-      addRequest(address(uint160(i)), makeRequest(i), 4);
+      addRequest(address(uint160(i)), makeConsolidation(i), 4);
     }
     assertStorage(count_slot, 5, "unexpected request count");
 
     // Simulate syscall, read only the max requests per block.
-    checkRequests(3, 1);
+    checkConsolidations(3, 1);
     assertExcess(4);
   }
 
@@ -99,10 +99,10 @@ contract ConsolidationTest is TestHelper {
 
     // Add a bunch of requests.
     for (; idx < count; idx++) {
-      addRequest(address(uint160(idx)), makeRequest(idx), 1);
+      addRequest(address(uint160(idx)), makeConsolidation(idx), 1);
     }
     assertStorage(count_slot, count, "unexpected request count");
-    checkRequests(0, max_per_block);
+    checkConsolidations(0, max_per_block);
 
     uint256 read = max_per_block;
     uint256 excess = count - target_per_block;
@@ -115,13 +115,13 @@ contract ConsolidationTest is TestHelper {
       
       uint256 fee = computeFee(excess);
       if (idx % 2 == 0) {
-        addRequest(address(uint160(idx)), makeRequest(idx), fee);
+        addRequest(address(uint160(idx)), makeConsolidation(idx), fee);
       } else {
-        addFailedRequest(address(uint160(idx)), makeRequest(idx), fee-1);
+        addFailedRequest(address(uint160(idx)), makeConsolidation(idx), fee-1);
       }
       
       uint256 expected = min(idx-read+1, max_per_block);
-      checkRequests(read, expected);
+      checkConsolidations(read, expected);
 
       if (excess > 0 && idx % 2 != 0) {
         excess--;
@@ -174,27 +174,27 @@ contract ConsolidationTest is TestHelper {
     assertStorage(idx+3, toFixed(req, 64, 96), "target[16:48] not written to queue");
   }
 
-  // checkRequest will simulate a system call to the system contract and verify
-  // the expected requests are returned.
+  // checkConsolidations will simulate a system call to the system contract and
+  // verify the expected consolidation requests are returned.
   //
   // It assumes that addresses are stored as uint256(index) and pubkeys are
   // uint8(index), repeating.
-  function checkRequests(uint256 startIndex, uint256 count) internal returns (uint256) {
+  function checkConsolidations(uint256 startIndex, uint256 count) internal returns (uint256) {
     bytes memory requests = getRequests();
     assertEq(requests.length, count*116);
     for (uint256 i = 0; i < count; i++) {
       uint256 offset = i*116;
       assertEq(toFixed(requests, offset, offset+20) >> 96, uint256(startIndex+i), "unexpected request address returned");
-      assertEq(toFixed(requests, offset+20, offset+52), toFixed(makeRequest(startIndex+i), 0, 32), "unexpected source[0:32] returned");
-      assertEq(toFixed(requests, offset+52, offset+84), toFixed(makeRequest(startIndex+i), 32, 64), "unexpected source[32:48] ++ target[0:16] returned");
-      assertEq(toFixed(requests, offset+84, offset+116), toFixed(makeRequest(startIndex+i), 64, 96), "unexpected target[16:48] returned");
+      assertEq(toFixed(requests, offset+20, offset+52), toFixed(makeConsolidation(startIndex+i), 0, 32), "unexpected source[0:32] returned");
+      assertEq(toFixed(requests, offset+52, offset+84), toFixed(makeConsolidation(startIndex+i), 32, 64), "unexpected source[32:48] ++ target[0:16] returned");
+      assertEq(toFixed(requests, offset+84, offset+116), toFixed(makeConsolidation(startIndex+i), 64, 96), "unexpected target[16:48] returned");
     }
     return count;
   }
 
-  function makeRequest(uint256 x) internal pure returns (bytes memory) {
+  // makeWithdrawal constructs a withdrawal request with a base of x.
+  function makeConsolidation(uint256 x) internal pure returns (bytes memory) {
     bytes memory out = new bytes(96);
-
     // source
     for (uint256 i = 0; i < 48; i++) {
       out[i] = bytes1(uint8(x));
@@ -203,7 +203,6 @@ contract ConsolidationTest is TestHelper {
     for (uint256 i = 0; i < 48; i++) {
       out[48 + i] = bytes1(uint8(x+1));
     }
-
     return out;
   }
 }

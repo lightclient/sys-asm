@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import "./TestHelper.sol";
+import "./Test.sol";
 
 uint256 constant target_per_block = 2;
 uint256 constant max_per_block = 16;
 
-contract WithdrawalTest is TestHelper {
+contract WithdrawalsTest is Test {
   address unit;
 
   function setUp() public {
@@ -15,8 +15,8 @@ contract WithdrawalTest is TestHelper {
     unit = addr;
   }
 
-  // testInvalidRequest checks that common invalid withdrawal requests are rejected.
-  function testInvalidRequest() public {
+  // testInvalidWithdrawal checks that common invalid withdrawal requests are rejected.
+  function testInvalidWithdrawal() public {
     // pubkey too small
     (bool ret,) = addr.call{value: 1e18}(hex"1234");
     assertEq(ret, false);
@@ -30,13 +30,13 @@ contract WithdrawalTest is TestHelper {
     assertEq(ret, false);
   }
 
-  // testRequest verifies a single withdrawal request below the target request
+  // testWithdrawal verifies a single withdrawal request below the target request
   // count is accepted and read successfully.
-  function testRequest() public {
+  function testWithdrawal() public {
     bytes memory data = hex"1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111112222222222222222";
     (bool ret,) = addr.call{value: 2}(data);
     assertEq(ret, true);
-    assertStorage(count_slot, 1, "unexpected withdrawal request count");
+    assertStorage(count_slot, 1, "unexpected request count");
     assertExcess(0);
 
     bytes memory req = getRequests();
@@ -51,29 +51,29 @@ contract WithdrawalTest is TestHelper {
   // request than can be read per block, the queue is eventually cleared and the
   // head and tails are reset to zero.
   function testQueueReset() public {
-    // Add more requests than the max per block (16) so that the queue is not
-    // immediately emptied.
+    // Add more withdrawal requests than the max per block (16) so that the
+    // queue is not immediately emptied.
     for (uint256 i = 0; i < max_per_block+1; i++) {
-      addRequest(address(uint160(i)), makeRequest(i), 2);
+      addRequest(address(uint160(i)), makeWithdrawal(i), 2);
     }
     assertStorage(count_slot, max_per_block+1, "unexpected request count");
 
-    // Simulate syscall, check that max requests per block are read.
-    checkRequests(0, max_per_block);
+    // Simulate syscall, check that max withdrawal requests per block are read.
+    checkWithdrawals(0, max_per_block);
     assertExcess(15);
 
-    // Add another batch of max requests per block (16) so the next read leaves a
-    // single request in the queue.
+    // Add another batch of max withdrawal requests per block (16) so the next
+    // read leaves a single withdrawal request in the queue.
     for (uint256 i = 17; i < 33; i++) {
-      addRequest(address(uint160(i)), makeRequest(i), 2);
+      addRequest(address(uint160(i)), makeWithdrawal(i), 2);
     }
     assertStorage(count_slot, max_per_block, "unexpected request count");
 
     // Simulate syscall. Verify first that max per block are read. Then
     // verify only the single final requst is read.
-    checkRequests(16, max_per_block);
+    checkWithdrawals(16, max_per_block);
     assertExcess(29);
-    checkRequests(32, 1);
+    checkWithdrawals(32, 1);
     assertExcess(27);
 
     // Now ensure the queue is empty and has reset to zero.
@@ -83,12 +83,12 @@ contract WithdrawalTest is TestHelper {
     // Add five (5) more requests to check that new requests can be added after the queue
     // is reset.
     for (uint256 i = 33; i < 38; i++) {
-      addRequest(address(uint160(i)), makeRequest(i), 4);
+      addRequest(address(uint160(i)), makeWithdrawal(i), 4);
     }
     assertStorage(count_slot, 5, "unexpected request count");
 
     // Simulate syscall, read only the max requests per block.
-    checkRequests(33, 5);
+    checkWithdrawals(33, 5);
     assertExcess(30);
   }
 
@@ -101,26 +101,26 @@ contract WithdrawalTest is TestHelper {
 
     // Add a bunch of requests.
     for (; idx < count; idx++) {
-      addRequest(address(uint160(idx)), makeRequest(idx), 1);
+      addRequest(address(uint160(idx)), makeWithdrawal(idx), 1);
     }
     assertStorage(count_slot, count, "unexpected request count");
-    checkRequests(0, max_per_block);
+    checkWithdrawals(0, max_per_block);
 
     uint256 read = max_per_block;
     uint256 excess = count - target_per_block;
 
-    // Attempt to add a request with fee too low and a request with fee exactly
-    // correct. This should cause the excess requests counter to decrease by 1 each
-    // iteration.
+    // Attempt to add a withdrawal request with fee too low and a withdrawal
+    // request with fee exactly correct. This should cause the excess requests
+    // counter to decrease by 1 each iteration.
     for (uint256 i = 0; i < count; i++) {
       assertExcess(excess);
       
       uint256 fee = computeFee(excess);
-      addFailedRequest(address(uint160(idx)), makeRequest(idx), fee-1);
-      addRequest(address(uint160(idx)), makeRequest(idx), fee);
+      addFailedRequest(address(uint160(idx)), makeWithdrawal(idx), fee-1);
+      addRequest(address(uint160(idx)), makeWithdrawal(idx), fee);
 
       uint256 expected = min(idx-read+1, max_per_block);
-      checkRequests(read, expected);
+      checkWithdrawals(read, expected);
 
       if (excess != 0) {
         excess--;
@@ -172,27 +172,27 @@ contract WithdrawalTest is TestHelper {
     assertStorage(idx+2, toFixed(req, 32, 56), "pk2_am not written to queue");
   }
 
-  // checkRequest will simulate a system call to the system contract and verify
-  // the expected requests are returned.
+  // checkWithdrawals will simulate a system call to the system contract and verify
+  // the expected withdrawal requests are returned.
   //
   // It assumes that addresses are stored as uint256(index) and pubkeys are
   // uint8(index), repeating.
-  function checkRequests(uint256 startIndex, uint256 count) internal returns (uint256) {
+  function checkWithdrawals(uint256 startIndex, uint256 count) internal returns (uint256) {
     bytes memory requests = getRequests();
     assertEq(requests.length, count*76);
     for (uint256 i = 0; i < count; i++) {
       uint256 offset = i*76;
       assertEq(toFixed(requests, offset, offset+20) >> 96, uint256(startIndex+i), "unexpected request address returned");
-      assertEq(toFixed(requests, offset+20, offset+52), toFixed(makeRequest(startIndex+i), 0, 32), "unexpected request pk returned");
-      assertEq(toFixed(requests, offset+52, offset+68), toFixed(makeRequest(startIndex+i), 32, 48), "unexpected request pk returned");
-      assertEq(toFixed(requests, offset+68, offset+76), toFixed(makeRequest(startIndex+i), 48, 56), "unexpected request amount returned");
+      assertEq(toFixed(requests, offset+20, offset+52), toFixed(makeWithdrawal(startIndex+i), 0, 32), "unexpected request pk returned");
+      assertEq(toFixed(requests, offset+52, offset+68), toFixed(makeWithdrawal(startIndex+i), 32, 48), "unexpected request pk returned");
+      assertEq(toFixed(requests, offset+68, offset+76), toFixed(makeWithdrawal(startIndex+i), 48, 56), "unexpected request amount returned");
     }
     return count;
   }
 
-  function makeRequest(uint256 x) internal pure returns (bytes memory) {
+  // makeWithdrawal constructs a withdrawal request with a base of x.
+  function makeWithdrawal(uint256 x) internal pure returns (bytes memory) {
     bytes memory out = new bytes(56);
-
     // pubkey
     for (uint256 i = 0; i < 48; i++) {
       out[i] = bytes1(uint8(x));
@@ -201,7 +201,6 @@ contract WithdrawalTest is TestHelper {
     for (uint256 i = 0; i < 8; i++) {
       out[48 + i] = bytes1(uint8(x+1));
     }
-
     return out;
   }
 }
