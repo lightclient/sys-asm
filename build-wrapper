@@ -3,10 +3,9 @@ set -euf -o pipefail
 
 SCRIPT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]:-$0}"; )" &> /dev/null && pwd 2> /dev/null; )";
 
-WITHDRAWAL_BYTECODE="$(geas "src/withdrawal.eas")"
-FAKE_EXPO_BYTECODE="$(geas "src/fake_expo_test.eas")"
-
-CONSOLODATION_BYTECODE="$(geas "src/consolidation.eas")"
+WITHDRAWAL_BYTECODE="$(geas "src/withdrawals/main.eas")"
+CONSOLODATION_BYTECODE="$(geas "src/consolidations/main.eas")"
+FAKE_EXPO_BYTECODE="$(geas "src/common/fake_expo_test.eas")"
 
 sed \
     -e "s/@bytecode@/$WITHDRAWAL_BYTECODE/" \

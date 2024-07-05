@@ -85,7 +85,7 @@ check_input:
   push SLOT_EXCESS      ;; [excess_slot, update_fraction]
   sload                 ;; [excess, update_fraction]
   push MIN_FEE          ;; [min_fee, excess, update_fraction]
-  #include "fake_expo.eas"
+  #include "../common/fake_expo.eas"
 
   ;; Determine if the fee provided is enough to cover the request fee.
   callvalue             ;; [callvalue, req_fee]
