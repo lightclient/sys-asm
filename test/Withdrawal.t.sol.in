@@ -35,7 +35,7 @@ contract WithdrawalsTest is Test {
   function testWithdrawal() public {
     bytes memory data = hex"1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111112222222222222222";
 
-    vm.expectEmit(false, false, false, true);
+    vm.expectEmitAnonymous(false, false, false, false, true);
     assembly {
       let ptr := mload(0x40)
       mstore(ptr, shl(96, address()))
