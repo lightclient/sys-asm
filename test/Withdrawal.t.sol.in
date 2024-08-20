@@ -11,7 +11,7 @@ contract WithdrawalsTest is Test {
 
   function setUp() public {
     vm.etch(addr, hex"@bytecode@");
-    vm.etch(fakeExpo, hex"@bytecode2@");
+    vm.etch(fakeExpo, hex"@bytecode_expo@");
     unit = addr;
   }
 

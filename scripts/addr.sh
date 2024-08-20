@@ -30,6 +30,10 @@ default_score=5
 score=${2:-$default_score}
 
 case $1 in
+  beaconroot|b|4788)
+    echo "searching for beacon root deployment data "
+    nick search --score=$score --initcode="0x$(geas src/beacon_root/ctor.eas)" --prefix=0xbeac02 --suffix=0x0000
+    ;;
   withdrawals|wxs|7002)
     echo "searching for withdrawals deployment data "
     nick search --score=$score --initcode="0x$(geas src/withdrawals/ctor.eas)" --prefix=0x0000 --suffix=0xaaaa
