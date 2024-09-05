@@ -4,7 +4,7 @@
 ;;    ██╔╝ ████╔╝██║████╔╝██║██╔═══╝  ██╔══██║╚════██║██║╚██╔╝██║
 ;;    ██║  ╚██████╔╝╚██████╔╝███████╗ ██║  ██║███████║██║ ╚═╝ ██║
 ;;    ╚═╝   ╚═════╝  ╚═════╝ ╚══════╝ ╚═╝  ╚═╝╚══════╝╚═╝     ╚═╝
-;;                                                              
+;;
 ;; This is an implementation of EIP-7002's pre-deploy contract. It implements an
 ;; unvalidated withdrawal requests queue for beacon chain validators. The queue
 ;; is tracked using head and tail index pointers. After the queue is emptied,
@@ -45,7 +45,7 @@
 
 .start:
   ;; Protect the system subroutine by checking if the caller is the system
-  ;; address. 
+  ;; address.
   caller               ;; [caller]
   push20 SYSTEM_ADDR   ;; [sysaddr, caller]
   eq                   ;; [sysaddr == caller]
@@ -177,7 +177,7 @@ check_input:
 ;; with each record being exactly 76 bytes.
 ;;
 ;;  Withdrawal request record:
-;; 
+;;
 ;;  +------+--------+--------+
 ;;  | addr | pubkey | amount |
 ;;  +------+--------+--------+
@@ -240,7 +240,7 @@ accum_loop:
   push QUEUE_OFFSET     ;; [offset, 3*(i+head_idx), record_offset, i, ..]
   add                   ;; [addr_offset, record_offset, i, ..]
 
-  ;; Read address. 
+  ;; Read address.
   dup1                  ;; [addr_offset, addr_offset, record_offset, i, ..]
   sload                 ;; [addr, addr_offset, record_offset, i, ..]
 
@@ -259,13 +259,13 @@ accum_loop:
 
   ;; Write values to memory flat and contiguously. This require combining the
   ;; three storage elements (addr, pk[0:32], pk2_am) so there is no padding.
-  ;;  
+  ;;
   ;; Each stack element has the following layout:
   ;;
   ;; A: addr
-  ;;  0x00 | 00 00 00 00 00 00 00 00 00 00 00 00 aa aa aa aa 
+  ;;  0x00 | 00 00 00 00 00 00 00 00 00 00 00 00 aa aa aa aa
   ;;  0x10 | aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa
-  ;; 
+  ;;
   ;; B: pk[0:32]
   ;;  0x00 | bb bb bb bb bb bb bb bb bb bb bb bb bb bb bb bb
   ;;  0x10 | bb bb bb bb bb bb bb bb bb bb bb bb bb bb bb bb
@@ -283,7 +283,7 @@ accum_loop:
   swap2                 ;; [addr, pk[0:32], pk2_am, record_offset, i, ..]
   push 12*8             ;; [96, addr, pk0:32], pk2_am, record_offset, i, ..]
   shl                   ;; [addr<<96, pk[0:32], pk2_am, record_offset, i, ..]
-  
+
   ;; Store addr at offset = i*RECORD_SIZE.
   dup4                  ;; [record_offset, addr<<96, pk[0:32], pk2_am, record_offset, i, ..]
   mstore                ;; [pk[0:32], pk2_am, record_offset, i, ..]
@@ -342,7 +342,7 @@ update_excess:
   ;; Update the new excess withdrawal requests.
   push SLOT_EXCESS      ;; [excess_slot, count]
   sload                 ;; [excess, count]
-  
+
   ;; Check if excess needs to be reset to 0 for first iteration after
   ;; activation.
   dup1                  ;; [excess, excess, count, count]
@@ -368,11 +368,11 @@ skip_reset:
   add                   ;; [count+excess, target, count, excess, count]
   gt                    ;; [count+excess > target, count, excess, count]
   jumpi @compute_excess ;; [count, excess, count]
-  
+
   ;; Zero out excess.
   pop                   ;; [excess, count]
   pop                   ;; [count]
-  push0                 
+  push0
   jump @store_excess
 
 compute_excess:
