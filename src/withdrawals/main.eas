@@ -311,6 +311,8 @@ accum_loop:
 
   ;; Store am at offset = i*RECORD_SIZE + 68.
   swap1                 ;; [record_offset, am, i, ..]
+  push 68               ;; [68, record_offset, am, i, ..]
+  add                   ;; [record_offset+68, am, i, ..]
   %mstore_uint64_le()   ;; [i, ..]
 
   ;; Increment i.
