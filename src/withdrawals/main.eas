@@ -294,11 +294,24 @@ accum_loop:
   add                   ;; [record_offset+20, pk[0:32], pk2_am, record_offset, i, ..]
   mstore                ;; [pk2_am, record_offset, i, ..]
 
-  ;; Store pk2_am at offset = i*RECORD_SIZE + 52.
-  swap1                 ;; [record_offset, pk2_am, i, ..]
-  push 52               ;; [52, record_offset, pk2_am, i, ..]
-  add                   ;; [record_offset+52, pk2_am, i, ..]
-  mstore                ;; [i, ..]
+  ;; Extract pk2 from pk2_am.
+  dup1                  ;; [pk2_am, pk2_am, record_offset, i, ..]
+  push (1<<16) - 1      ;; [mask, pk2_am, pk2_am, record_offset, i, ..]
+  and                   ;; [pk2, pk2_am, record_offset, i, ..]
+
+  ;; Store pk2 at offset = i*RECORD_SIZE + 52.
+  dup3                  ;; [record_offset, pk2, pk2_am, record_offset, i, ..]
+  push 52               ;; [52, record_offset, pk2, pk2_am, record_offset, i, ..]
+  add                   ;; [record_offset+52, pk2, pk2_am, record_offset, i, ..]
+  mstore                ;; [pk2_am, record_offset, i, ..]
+
+  ;; Extract am from pk2_am
+  push 16*8             ;; [shft, pk2_am, record_offset, i, ..]
+  shl                   ;; [am, record_offset, i, ..]
+
+  ;; Store am at offset = i*RECORD_SIZE + 68.
+  swap1                 ;; [record_offset, am, i, ..]
+  %mstore_uint64_le()   ;; [i, ..]
 
   ;; Increment i.
   push 1                ;; [1, i, ..]
@@ -401,3 +414,54 @@ revert:
   push0
   push0
   revert
+
+;; -----------------------------------------------------------------------------
+;; MACROS ----------------------------------------------------------------------
+;; -----------------------------------------------------------------------------
+
+;; Helper for storing little-endian amount.
+#define %mstore_uint64_le() { ;; [offset, value]
+  dup2                  ;; [value, offset, value]
+  push 7*8              ;; [56, value, offset, value]
+  shr                   ;; [value>>56, offset, value]
+  dup2                  ;; [offset, value>>56, offset, value]
+  mstore8               ;; [offset, value]
+
+  dup2                  ;; [value, offset, value]
+  push 6*8              ;; [48, value, offset, value]
+  shr                   ;; [value>>48, offset, value]
+  dup2                  ;; [offset, value>>48, offset, value]
+  mstore8               ;; [offset, value]
+
+  dup2                  ;; [value, offset, value]
+  push 5*8              ;; [40, value, offset, value]
+  shr                   ;; [value>>40, offset, value]
+  dup2                  ;; [offset, value>>40, offset, value]
+  mstore8               ;; [offset, value]
+
+  dup2                  ;; [value, offset, value]
+  push 4*8              ;; [32, value, offset, value]
+  shr                   ;; [value>>32, offset, value]
+  dup2                  ;; [offset, value>>32, offset, value]
+  mstore8               ;; [offset, value]
+
+  dup2                  ;; [value, offset, value]
+  push 3*8              ;; [24, value, offset, value]
+  shr                   ;; [value>>24, offset, value]
+  dup2                  ;; [offset, value>>24, offset, value]
+  mstore8               ;; [offset, value]
+
+  dup2                  ;; [value, offset, value]
+  push 2*8              ;; [16, value, offset, value]
+  shr                   ;; [value>>16, offset, value]
+  dup2                  ;; [offset, value>>16, offset, value]
+  mstore8               ;; [offset, value]
+
+  dup2                  ;; [value, offset, value]
+  push 8                ;; [8, value, offset, value]
+  shr                   ;; [value>>8, offset, value]
+  dup2                  ;; [offset, value>>8, offset, value]
+  mstore8               ;; [offset, value]
+
+  mstore8               ;; []
+}
