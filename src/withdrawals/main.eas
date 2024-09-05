@@ -296,7 +296,7 @@ accum_loop:
 
   ;; Extract pk2 from pk2_am.
   dup1                  ;; [pk2_am, pk2_am, record_offset, i, ..]
-  push (1<<16) - 1      ;; [mask, pk2_am, pk2_am, record_offset, i, ..]
+  push (1<<(16*8))-1    ;; [mask, pk2_am, pk2_am, record_offset, i, ..]
   and                   ;; [pk2, pk2_am, record_offset, i, ..]
 
   ;; Store pk2 at offset = i*RECORD_SIZE + 52.
