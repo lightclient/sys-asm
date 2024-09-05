@@ -191,6 +191,7 @@ contract WithdrawalsTest is Test {
   // It assumes that addresses are stored as uint256(index) and pubkeys are
   // uint8(index), repeating.
   function checkWithdrawals(uint256 startIndex, uint256 count) internal returns (uint256) {
+    bytes memory amountBuffer = new bytes(8);
     bytes memory requests = getRequests();
     assertEq(requests.length, count*76);
 
@@ -205,12 +206,11 @@ contract WithdrawalsTest is Test {
       assertEq(toFixed(requests, offset+52, offset+68), toFixed(wd, 32, 48), "unexpected request pk2 returned");
 
       // Check amount.
-      bytes memory outputAmount = new bytes(8);
       for (uint j = 0; j < 8; j++) {
-         outputAmount[j] = requests[offset+68+j];
+         amountBuffer[j] = requests[offset+68+j];
       }
       bytes memory wantAmount = hex"de852726f6fb9f2d";
-      assertEq(outputAmount, wantAmount, "unexpected request amount returned");
+      assertEq(amountBuffer, wantAmount, "unexpected request amount returned");
     }
 
     return count;
