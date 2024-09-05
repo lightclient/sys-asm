@@ -195,17 +195,20 @@ contract WithdrawalsTest is Test {
 
     for (uint256 i = 0; i < count; i++) {
       uint256 offset = i*76;
-      uint256 index = startIndex + i;
+      uint256 wd_index = startIndex + i;
 
       // Check address, pubkey.
-      bytes memory wd = makeWithdrawal(index);
-      assertEq(toFixed(requests, offset, offset+20) >> 96, uint256(index), "unexpected request address returned");
-      assertEq(toFixed(requests, offset+20, offset+52), toFixed(wd, 0, 32), "unexpected request pk returned");
-      assertEq(toFixed(requests, offset+52, offset+68), toFixed(wd, 32, 48), "unexpected request pk returned");
+      bytes memory wd = makeWithdrawal(wd_index);
+      assertEq(toFixed(requests, offset, offset+20) >> 96, uint256(wd_index), "unexpected request address returned");
+      assertEq(toFixed(requests, offset+20, offset+52), toFixed(wd, 0, 32), "unexpected request pk1 returned");
+      assertEq(toFixed(requests, offset+52, offset+68), toFixed(wd, 32, 48), "unexpected request pk2 returned");
 
       // Check amount.
-      uint256 output_amt = getUint64LE(requests, 68);
-      uint256 want_amt = uint256(index*99);
+      bytes memory output_amt = new bytes(8);
+      for (uint j = 0; j < 8; j++) {
+         output_amt[j] = requests[offset+68+j];
+      }
+      bytes memory want_amt = hex"de852726f6fb9f2d";
       assertEq(output_amt, want_amt, "unexpected request amount returned");
     }
 
@@ -218,14 +221,9 @@ contract WithdrawalsTest is Test {
     for (uint256 i = 0; i < 48; i++) {
       pk[i] = bytes1(uint8(x));
     }
-    uint64 amt = uint64(x*99);
-    bytes memory out = abi.encodePacked(pk, amt);
+    bytes memory amt = hex"2d9ffbf6262785de";
+    bytes memory out = bytes.concat(pk, amt);
     require(out.length == 56);
     return out;
-  }
-
-  // getUint64LE reads a little-endian uint64 at the given offset;
-  function getUint64LE(bytes memory b, uint offset) internal view returns (uint256) {
-      return uint8(b[offset+7])<<56 | uint8(b[offset+6])<<48 | uint8(b[offset+5])<<40 | uint8(b[offset+4])<<32 | uint8(b[offset+3])<<24 | uint8(b[offset+2])<<16 | uint8(b[offset+1])<<8 | uint8(b[offset]);
   }
 }
