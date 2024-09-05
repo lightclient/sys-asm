@@ -281,7 +281,7 @@ accum_loop:
 
   ;; Shift addr bytes.
   swap2                 ;; [addr, pk[0:32], pk2_am, record_offset, i, ..]
-  push 12*8             ;; [96, addr, pk0:32], pk2_am, record_offset, i, ..]
+  push 12*8             ;; [96, addr, pk[0:32], pk2_am, record_offset, i, ..]
   shl                   ;; [addr<<96, pk[0:32], pk2_am, record_offset, i, ..]
 
   ;; Store addr at offset = i*RECORD_SIZE.
@@ -305,7 +305,7 @@ accum_loop:
   add                   ;; [record_offset+52, pk2, pk2_am, record_offset, i, ..]
   mstore                ;; [pk2_am, record_offset, i, ..]
 
-  ;; Extract am from pk2_am
+  ;; Extract am from pk2_am.
   push 16*8             ;; [shft, pk2_am, record_offset, i, ..]
   shl                   ;; [am, record_offset, i, ..]
 
