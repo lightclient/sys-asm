@@ -41,7 +41,7 @@ abstract contract Test is StdTest {
 
   // assertStorage reads a value from the system contract and asserts it is
   // equal to the provided value.
-  function assertStorage(uint256 slot, uint256 value, string memory err) internal {
+  function assertStorage(uint256 slot, uint256 value, string memory err) internal view {
     bytes32 got = vm.load(addr, bytes32(slot));
     assertEq(got, bytes32(value), err);
   }
