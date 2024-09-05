@@ -195,21 +195,21 @@ contract WithdrawalsTest is Test {
 
     for (uint256 i = 0; i < count; i++) {
       uint256 offset = i*76;
-      uint256 wd_index = startIndex + i;
+      uint256 wdIndex = startIndex + i;
+      bytes memory wd = makeWithdrawal(wdIndex);
 
       // Check address, pubkey.
-      bytes memory wd = makeWithdrawal(wd_index);
-      assertEq(toFixed(requests, offset, offset+20) >> 96, uint256(wd_index), "unexpected request address returned");
+      assertEq(toFixed(requests, offset, offset+20) >> 96, uint256(wdIndex), "unexpected request address returned");
       assertEq(toFixed(requests, offset+20, offset+52), toFixed(wd, 0, 32), "unexpected request pk1 returned");
       assertEq(toFixed(requests, offset+52, offset+68), toFixed(wd, 32, 48), "unexpected request pk2 returned");
 
       // Check amount.
-      bytes memory output_amt = new bytes(8);
+      bytes memory outputAmount = new bytes(8);
       for (uint j = 0; j < 8; j++) {
-         output_amt[j] = requests[offset+68+j];
+         outputAmount[j] = requests[offset+68+j];
       }
-      bytes memory want_amt = hex"de852726f6fb9f2d";
-      assertEq(output_amt, want_amt, "unexpected request amount returned");
+      bytes memory wantAmount = hex"de852726f6fb9f2d";
+      assertEq(outputAmount, wantAmount, "unexpected request amount returned");
     }
 
     return count;
