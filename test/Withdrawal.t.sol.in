@@ -226,6 +226,6 @@ contract WithdrawalsTest is Test {
 
   // getUint64LE reads a little-endian uint64 at the given offset;
   function getUint64LE(bytes memory b, uint offset) internal view returns (uint256) {
-      return uint8(b[offset])<<56 | uint8(b[offset+1])<<48 | uint8(b[offset+2])<<40 | uint8(b[offset+3])<<32 | uint8(b[offset+4])<<24 | uint8(b[offset+5])<<16 | uint8(b[offset+6])<<8 | uint8(b[offset+7]);
+      return uint8(b[offset+7])<<56 | uint8(b[offset+6])<<48 | uint8(b[offset+5])<<40 | uint8(b[offset+4])<<32 | uint8(b[offset+3])<<24 | uint8(b[offset+2])<<16 | uint8(b[offset+1])<<8 | uint8(b[offset]);
   }
 }
