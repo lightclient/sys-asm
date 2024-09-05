@@ -52,9 +52,10 @@ contract WithdrawalsTest is Test {
 
     bytes memory req = getRequests();
     assertEq(req.length, 76);
-    assertEq(toFixed(req, 20, 52), toFixed(exp_req, 0, 32));    // check pk1
-    assertEq(toFixed(req, 52, 68), toFixed(exp_req, 32, 48));   // check pk2
-    assertEq(toFixed(req, 68, 76), toFixed(exp_req, 48, 56));   // check amt
+    assertEq(bytes20(req), bytes20(address(this)));            // check addr
+    assertEq(toFixed(req, 20, 52), toFixed(exp_req, 0, 32));   // check pk1
+    assertEq(toFixed(req, 52, 68), toFixed(exp_req, 32, 48));  // check pk2
+    assertEq(toFixed(req, 68, 76), toFixed(exp_req, 48, 56));  // check amt
     assertStorage(count_slot, 0, "unexpected request count");
     assertExcess(0);
   }
