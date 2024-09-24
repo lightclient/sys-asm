@@ -1,7 +1,7 @@
-;; Store 1181 as a temporary excess value as it creates a fee so large that no
+;; Store 65536 as a temporary excess value as it creates a fee so large that no
 ;; request will be accepted in the queue until after 7002 is activated and
 ;; called by the system for the first time.
-push 1181
+push 65536
 push0
 sstore
 

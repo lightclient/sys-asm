@@ -11,5 +11,6 @@ contract FakeExpoTest is Test {
   // testFakeExpo calls the fake exponentiation logic with specific values.
   function testFakeExpo() public {
     assertEq(callFakeExpo(1, 100, 17), 357);
+    assertEq(callFakeExpo(1, 65536, 17), 923226766505217739920341538189009691485399699651503388307248448916147782597);
   }
 }
