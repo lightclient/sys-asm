@@ -72,11 +72,12 @@ loadtime:
         calldataload     ;; [input_timestamp]
         dup1             ;; [input_timestamp, input_timestamp]
 
-        ;; Verify input timestamp is non-zero.
-        iszero           ;; [input_timestamp == 0, input_timestamp]
-        push1 @throw      ;; [throw_lbl, input_timestamp == 0, input_timestamp]
+        ;; Jump to continue if timestamp is non-zero, otherwise revert.
+        push1 @time_ok   ;; [time_ok_lbl, input_timestamp, input_timestamp]
         jumpi            ;; [input_timestamp]
+        %do_revert()     ;; []
 
+time_ok:
         ;; Compute the timestamp index and load from storage.
         push3 BUFLEN     ;; [buflen, input_timestamp]
         dup2             ;; [input_timestamp, buflen, input_timestamp]
@@ -107,10 +108,6 @@ loadroot:
         push1 32         ;; [size]
         push0            ;; [offset, size]
         return           ;; []
-
-throw:
-        ;; Reverts current execution with no return data.
-        %do_revert()
 
 submit:
         ;; Calculate the index the timestamp should be stored at, e.g.
