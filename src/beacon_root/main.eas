@@ -131,5 +131,3 @@ submit:
         push3 BUFLEN     ;; [buflen, time_index, root]
         add              ;; [root_index, root]
         sstore           ;; []
-
-        stop             ;; []
