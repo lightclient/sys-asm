@@ -36,11 +36,10 @@
 #define FEE_UPDATE_FRACTION 17
 #define EXCESS_INHIBITOR 1181
 
-#define INPUT_SIZE 56   ;; pubkey ++ amount
-#define RECORD_SIZE 76  ;; address ++ pubkey ++ amount
-
+#define INPUT_SIZE 56         ;; pubkey ++ amount
+#define LOG_RECORD_SIZE 76    ;; address ++ pubkey ++ amount
+#define OUT_RECORD_SIZE 77    ;; type ++ address ++ pubkey ++ amount
 #define OUT_RECORD_TYPE 0x01
-#define OUT_RECORD_SIZE RECORD_SIZE + 1  ;; type ++ address ++ pubkey ++ amount
 
 ;; -----------------------------------------------------------------------------
 ;; PROGRAM START ---------------------------------------------------------------
@@ -157,7 +156,7 @@ check_input:
   calldatacopy          ;; [..]
 
   ;; Log record.
-  push1 RECORD_SIZE     ;; [size, ..]
+  push1 LOG_RECORD_SIZE ;; [size, ..]
   push0                 ;; [idx, size, ..]
   log0                  ;; [..]
 
@@ -219,7 +218,7 @@ begin_loop:
   push0                 ;; [i, count, head_idx, tail_idx]
 
 accum_loop:
-  ;; This loop will read each request and byte bang it into a 76 byte chunk.
+  ;; This loop will read each request and stores them to the return buffer.
 
   ;; Bounds check, ensure i < count.
   dup2                  ;; [count, i, count, head_idx, tail_idx]
@@ -227,7 +226,7 @@ accum_loop:
   eq                    ;; [i == count, i, count, head_idx, tail_idx]
   jumpi @update_head    ;; [i, count, head_idx, tail_idx]
 
-  ;; Precompute record_offset = i*RECORD_SIZE.
+  ;; Precompute record_offset = i*OUT_RECORD_SIZE.
   dup1                  ;; [i, i, count, head_idx, tail_idx]
   push OUT_RECORD_SIZE  ;; [size, i, i, count, head_idx, tail_idx]
   mul                   ;; [record_offset, i, count, head_idx, tail_idx]
@@ -294,11 +293,11 @@ accum_loop:
   push 12*8             ;; [96, addr, pk[0:32], pk2_am, record_offset, i, ..]
   shl                   ;; [addr<<96, pk[0:32], pk2_am, record_offset, i, ..]
 
-  ;; Store addr at offset = i*RECORD_SIZE.
+  ;; Store addr at offset = i*OUT_RECORD_SIZE + 1.
   dup4                  ;; [record_offset, addr<<96, pk[0:32], pk2_am, record_offset, i, ..]
   mstore                ;; [pk[0:32], pk2_am, record_offset, i, ..]
 
-  ;; Store pk[0:32] at offset = i*RECORD_SIZE + 20.
+  ;; Store pk[0:32] at offset = i*OUT_RECORD_SIZE + 21.
   dup3                  ;; [record_offset, pk[0:32], pk2_am, record_offset, i, ..]
   push 20               ;; [20, record_offset, pk[0:32], pk2_am, record_offset, i, ..]
   add                   ;; [record_offset+20, pk[0:32], pk2_am, record_offset, i, ..]
@@ -309,7 +308,7 @@ accum_loop:
   push pk2_mask         ;; [mask, pk2_am, pk2_am, record_offset, i, ..]
   and                   ;; [pk2, pk2_am, record_offset, i, ..]
 
-  ;; Store pk2 at offset = i*RECORD_SIZE + 52.
+  ;; Store pk2 at offset = i*OUT_RECORD_SIZE + 53.
   dup3                  ;; [record_offset, pk2, pk2_am, record_offset, i, ..]
   push 52               ;; [52, record_offset, pk2, pk2_am, record_offset, i, ..]
   add                   ;; [record_offset+52, pk2, pk2_am, record_offset, i, ..]
@@ -319,7 +318,7 @@ accum_loop:
   push 8*8              ;; [shft, pk2_am, record_offset, i, ..]
   shr                   ;; [am, record_offset, i, ..]
 
-  ;; Store am at offset = i*RECORD_SIZE + 68.
+  ;; Store am at offset = i*OUT_RECORD_SIZE + 69.
   swap1                 ;; [record_offset, am, i, ..]
   push 68               ;; [68, record_offset, am, i, ..]
   add                   ;; [record_offset+68, am, i, ..]
@@ -416,7 +415,7 @@ store_excess:
   sstore                ;; [count]
 
   ;; Return the withdrawal requests.
-  push RECORD_SIZE      ;; [record_size, count]
+  push OUT_RECORD_SIZE  ;; [record_size, count]
   mul                   ;; [size]
   push0                 ;; [0, size]
   return                ;; []
