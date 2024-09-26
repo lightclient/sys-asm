@@ -33,7 +33,8 @@ contract WithdrawalsTest is Test {
   // testWithdrawal verifies a single withdrawal request below the target request
   // count is accepted and read successfully.
   function testWithdrawal() public {
-    bytes memory data = hex"1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111112222222222222222";
+    bytes memory data    = hex"1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111110203040506070809";
+    bytes memory exp_req = hex"1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111110908070605040302";
 
     vm.expectEmitAnonymous(false, false, false, false, true);
     assembly {
@@ -51,8 +52,10 @@ contract WithdrawalsTest is Test {
 
     bytes memory req = getRequests();
     assertEq(req.length, 76);
-    assertEq(toFixed(req, 20, 52), toFixed(data, 0, 32));
-    assertEq(toFixed(req, 52, 76), toFixed(data, 32, 56));
+    assertEq(bytes20(req), bytes20(address(this)));            // check addr
+    assertEq(toFixed(req, 20, 52), toFixed(exp_req, 0, 32));   // check pk1
+    assertEq(toFixed(req, 52, 68), toFixed(exp_req, 32, 48));  // check pk2
+    assertEq(toFixed(req, 68, 76), toFixed(exp_req, 48, 56));  // check amt
     assertStorage(count_slot, 0, "unexpected request count");
     assertExcess(0);
   }
@@ -124,7 +127,7 @@ contract WithdrawalsTest is Test {
     // counter to decrease by 1 each iteration.
     for (uint256 i = 0; i < count; i++) {
       assertExcess(excess);
-      
+
       uint256 fee = computeFee(excess);
       addFailedRequest(address(uint160(idx)), makeWithdrawal(idx), fee-1);
       addRequest(address(uint160(idx)), makeWithdrawal(idx), fee);
@@ -188,29 +191,40 @@ contract WithdrawalsTest is Test {
   // It assumes that addresses are stored as uint256(index) and pubkeys are
   // uint8(index), repeating.
   function checkWithdrawals(uint256 startIndex, uint256 count) internal returns (uint256) {
+    bytes memory amountBuffer = new bytes(8);
     bytes memory requests = getRequests();
     assertEq(requests.length, count*76);
+
     for (uint256 i = 0; i < count; i++) {
       uint256 offset = i*76;
-      assertEq(toFixed(requests, offset, offset+20) >> 96, uint256(startIndex+i), "unexpected request address returned");
-      assertEq(toFixed(requests, offset+20, offset+52), toFixed(makeWithdrawal(startIndex+i), 0, 32), "unexpected request pk returned");
-      assertEq(toFixed(requests, offset+52, offset+68), toFixed(makeWithdrawal(startIndex+i), 32, 48), "unexpected request pk returned");
-      assertEq(toFixed(requests, offset+68, offset+76), toFixed(makeWithdrawal(startIndex+i), 48, 56), "unexpected request amount returned");
+      uint256 wdIndex = startIndex + i;
+      bytes memory wd = makeWithdrawal(wdIndex);
+
+      // Check address, pubkey.
+      assertEq(toFixed(requests, offset, offset+20) >> 96, uint256(wdIndex), "unexpected request address returned");
+      assertEq(toFixed(requests, offset+20, offset+52), toFixed(wd, 0, 32), "unexpected request pk1 returned");
+      assertEq(toFixed(requests, offset+52, offset+68), toFixed(wd, 32, 48), "unexpected request pk2 returned");
+
+      // Check amount.
+      for (uint j = 0; j < 8; j++) {
+         amountBuffer[j] = requests[offset+68+j];
+      }
+      bytes memory wantAmount = hex"de852726f6fb9f2d";
+      assertEq(amountBuffer, wantAmount, "unexpected request amount returned");
     }
+
     return count;
   }
 
   // makeWithdrawal constructs a withdrawal request with a base of x.
   function makeWithdrawal(uint256 x) internal pure returns (bytes memory) {
-    bytes memory out = new bytes(56);
-    // pubkey
+    bytes memory pk = new bytes(48);
     for (uint256 i = 0; i < 48; i++) {
-      out[i] = bytes1(uint8(x));
+      pk[i] = bytes1(uint8(x));
     }
-    // amount
-    for (uint256 i = 0; i < 8; i++) {
-      out[48 + i] = bytes1(uint8(x+1));
-    }
+    bytes memory amt = hex"2d9ffbf6262785de";
+    bytes memory out = bytes.concat(pk, amt);
+    require(out.length == 56);
     return out;
   }
 }

@@ -4,7 +4,7 @@
 ;;    ██╔╝ ████╔╝██║████╔╝██║██╔═══╝  ██╔══██║╚════██║██║╚██╔╝██║
 ;;    ██║  ╚██████╔╝╚██████╔╝███████╗ ██║  ██║███████║██║ ╚═╝ ██║
 ;;    ╚═╝   ╚═════╝  ╚═════╝ ╚══════╝ ╚═╝  ╚═╝╚══════╝╚═╝     ╚═╝
-;;                                                              
+;;
 ;; This is an implementation of EIP-7002's pre-deploy contract. It implements an
 ;; unvalidated withdrawal requests queue for beacon chain validators. The queue
 ;; is tracked using head and tail index pointers. After the queue is emptied,
@@ -45,7 +45,7 @@
 
 .start:
   ;; Protect the system subroutine by checking if the caller is the system
-  ;; address. 
+  ;; address.
   caller               ;; [caller]
   push20 SYSTEM_ADDR   ;; [sysaddr, caller]
   eq                   ;; [sysaddr == caller]
@@ -177,7 +177,7 @@ check_input:
 ;; with each record being exactly 76 bytes.
 ;;
 ;;  Withdrawal request record:
-;; 
+;;
 ;;  +------+--------+--------+
 ;;  | addr | pubkey | amount |
 ;;  +------+--------+--------+
@@ -240,7 +240,7 @@ accum_loop:
   push QUEUE_OFFSET     ;; [offset, 3*(i+head_idx), record_offset, i, ..]
   add                   ;; [addr_offset, record_offset, i, ..]
 
-  ;; Read address. 
+  ;; Read address.
   dup1                  ;; [addr_offset, addr_offset, record_offset, i, ..]
   sload                 ;; [addr, addr_offset, record_offset, i, ..]
 
@@ -259,13 +259,13 @@ accum_loop:
 
   ;; Write values to memory flat and contiguously. This require combining the
   ;; three storage elements (addr, pk[0:32], pk2_am) so there is no padding.
-  ;;  
+  ;;
   ;; Each stack element has the following layout:
   ;;
   ;; A: addr
-  ;;  0x00 | 00 00 00 00 00 00 00 00 00 00 00 00 aa aa aa aa 
+  ;;  0x00 | 00 00 00 00 00 00 00 00 00 00 00 00 aa aa aa aa
   ;;  0x10 | aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa
-  ;; 
+  ;;
   ;; B: pk[0:32]
   ;;  0x00 | bb bb bb bb bb bb bb bb bb bb bb bb bb bb bb bb
   ;;  0x10 | bb bb bb bb bb bb bb bb bb bb bb bb bb bb bb bb
@@ -281,9 +281,9 @@ accum_loop:
 
   ;; Shift addr bytes.
   swap2                 ;; [addr, pk[0:32], pk2_am, record_offset, i, ..]
-  push 12*8             ;; [96, addr, pk0:32], pk2_am, record_offset, i, ..]
+  push 12*8             ;; [96, addr, pk[0:32], pk2_am, record_offset, i, ..]
   shl                   ;; [addr<<96, pk[0:32], pk2_am, record_offset, i, ..]
-  
+
   ;; Store addr at offset = i*RECORD_SIZE.
   dup4                  ;; [record_offset, addr<<96, pk[0:32], pk2_am, record_offset, i, ..]
   mstore                ;; [pk[0:32], pk2_am, record_offset, i, ..]
@@ -294,11 +294,26 @@ accum_loop:
   add                   ;; [record_offset+20, pk[0:32], pk2_am, record_offset, i, ..]
   mstore                ;; [pk2_am, record_offset, i, ..]
 
-  ;; Store pk2_am at offset = i*RECORD_SIZE + 52.
-  swap1                 ;; [record_offset, pk2_am, i, ..]
-  push 52               ;; [52, record_offset, pk2_am, i, ..]
-  add                   ;; [record_offset+52, pk2_am, i, ..]
-  mstore                ;; [i, ..]
+  ;; Extract pk2 from pk2_am.
+  dup1                  ;; [pk2_am, pk2_am, record_offset, i, ..]
+  push pk2_mask         ;; [mask, pk2_am, pk2_am, record_offset, i, ..]
+  and                   ;; [pk2, pk2_am, record_offset, i, ..]
+
+  ;; Store pk2 at offset = i*RECORD_SIZE + 52.
+  dup3                  ;; [record_offset, pk2, pk2_am, record_offset, i, ..]
+  push 52               ;; [52, record_offset, pk2, pk2_am, record_offset, i, ..]
+  add                   ;; [record_offset+52, pk2, pk2_am, record_offset, i, ..]
+  mstore                ;; [pk2_am, record_offset, i, ..]
+
+  ;; Extract am from pk2_am.
+  push 8*8              ;; [shft, pk2_am, record_offset, i, ..]
+  shr                   ;; [am, record_offset, i, ..]
+
+  ;; Store am at offset = i*RECORD_SIZE + 68.
+  swap1                 ;; [record_offset, am, i, ..]
+  push 68               ;; [68, record_offset, am, i, ..]
+  add                   ;; [record_offset+68, am, i, ..]
+  %mstore_uint64_le()   ;; [i, ..]
 
   ;; Increment i.
   push 1                ;; [1, i, ..]
@@ -342,7 +357,7 @@ update_excess:
   ;; Update the new excess withdrawal requests.
   push SLOT_EXCESS      ;; [excess_slot, count]
   sload                 ;; [excess, count]
-  
+
   ;; Check if excess needs to be reset to 0 for first iteration after
   ;; activation.
   dup1                  ;; [excess, excess, count, count]
@@ -368,11 +383,11 @@ skip_reset:
   add                   ;; [count+excess, target, count, excess, count]
   gt                    ;; [count+excess > target, count, excess, count]
   jumpi @compute_excess ;; [count, excess, count]
-  
+
   ;; Zero out excess.
   pop                   ;; [excess, count]
   pop                   ;; [count]
-  push0                 
+  push0
   jump @store_excess
 
 compute_excess:
@@ -401,3 +416,71 @@ revert:
   push0
   push0
   revert
+
+;; -----------------------------------------------------------------------------
+;; MACROS ----------------------------------------------------------------------
+;; -----------------------------------------------------------------------------
+
+;; This defines a mask for accessing the top 16 bytes of a number.
+#define pk2_mask 0xffffffffffffffffffffffffffffffff00000000000000000000000000000000
+
+;; Helper for storing little-endian amount.
+#define %mstore_uint64_le() { ;; [offset, value]
+  dup2                  ;; [value, offset, value]
+  push 7*8              ;; [56, value, offset, value]
+  shr                   ;; [value>>56, offset, value]
+  dup2                  ;; [offset, value>>56, offset, value]
+  push 7                ;; [7, offset, value>>56, offset, value]
+  add                   ;; [offset+7, value>>56, offset, value]
+  mstore8               ;; [offset, value]
+
+  dup2                  ;; [value, offset, value]
+  push 6*8              ;; [48, value, offset, value]
+  shr                   ;; [value>>48, offset, value]
+  dup2                  ;; [offset, value>>48, offset, value]
+  push 6                ;; [6, offset, value>>48, offset, value]
+  add                   ;; [offset+6, value>>48, offset, value]
+  mstore8               ;; [offset, value]
+
+  dup2                  ;; [value, offset, value]
+  push 5*8              ;; [40, value, offset, value]
+  shr                   ;; [value>>40, offset, value]
+  dup2                  ;; [offset, value>>40, offset, value]
+  push 5                ;; [2, offset, value>>40, offset, value]
+  add                   ;; [offset+5, value>>40, offset, value]
+  mstore8               ;; [offset, value]
+
+  dup2                  ;; [value, offset, value]
+  push 4*8              ;; [32, value, offset, value]
+  shr                   ;; [value>>32, offset, value]
+  dup2                  ;; [offset, value>>32, offset, value]
+  push 4                ;; [4, offset, value>>32, offset, value]
+  add                   ;; [offset+4, value>>32, offset, value]
+  mstore8               ;; [offset, value]
+
+  dup2                  ;; [value, offset, value]
+  push 3*8              ;; [24, value, offset, value]
+  shr                   ;; [value>>24, offset, value]
+  dup2                  ;; [offset, value>>24, offset, value]
+  push 3                ;; [3, offset, value>>24, offset, value]
+  add                   ;; [offset+3, value>>24, offset, value]
+  mstore8               ;; [offset, value]
+
+  dup2                  ;; [value, offset, value]
+  push 2*8              ;; [16, value, offset, value]
+  shr                   ;; [value>>16, offset, value]
+  dup2                  ;; [offset, value>>16, offset, value]
+  push 2                ;; [2, offset, value>>16, offset, value]
+  add                   ;; [offset+2, value>>16, offset, value]
+  mstore8               ;; [offset, value]
+
+  dup2                  ;; [value, offset, value]
+  push 1*8              ;; [8, value, offset, value]
+  shr                   ;; [value>>8, offset, value]
+  dup2                  ;; [offset, value>>8, offset, value]
+  push 1                ;; [1, offset, value>>8, offset, value]
+  add                   ;; [offset+1, value>>8, offset, value]
+  mstore8               ;; [offset, value]
+
+  mstore8               ;; []
+}
