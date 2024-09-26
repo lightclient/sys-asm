@@ -26,11 +26,10 @@
 #define FEE_UPDATE_FRACTION 17
 #define EXCESS_INHIBITOR 1181
 
-#define INPUT_SIZE 96    ;; the size of (source ++ target)
-#define RECORD_SIZE 116  ;; the size of (address ++ source ++ target)
-
+#define INPUT_SIZE 96          ;; source ++ target
+#define LOG_RECORD_SIZE 116    ;; address ++ source ++ target)
+#define OUT_RECORD_SIZE 77     ;; type ++ address ++ source ++ target
 #define OUT_RECORD_TYPE 0x02
-#define OUT_RECORD_SIZE RECORD_SIZE + 1  ;; type ++ address ++ source ++ target
 
 ;; -----------------------------------------------------------------------------
 ;; PROGRAM START ---------------------------------------------------------------
@@ -157,7 +156,7 @@ check_input:
   calldatacopy          ;; [..]
 
   ;; Log record.
-  push1 RECORD_SIZE     ;; [size, ..]
+  push1 LOG_RECORD_SIZE ;; [size, ..]
   push0                 ;; [idx, size, ..]
   log0                  ;; [..]
 
@@ -177,7 +176,7 @@ check_input:
 ;; This is the logic executed by the protocol each block. It reads as many
 ;; requests as available from the queue, until the max request per
 ;; block is reached. The requests are returned as a contiguous array of bytes
-;; with each record being exactly RECORD_SIZE bytes.
+;; with each record being exactly OUT_RECORD_SIZE bytes.
 ;;
 ;;  Consolidation request record:
 ;;
@@ -219,7 +218,7 @@ begin_loop:
   push0                 ;; [i, count, head_idx, tail_idx]
 
 accum_loop:
-  ;; This loop will read each request and byte bang it into a RECORD_SIZE byte chunk.
+  ;; This loop will read each request and byte bang it into a OUT_RECORD_SIZE byte chunk.
 
   ;; Bounds check, ensure i < count.
   dup2                  ;; [count, i, count, head_idx, tail_idx]
@@ -227,7 +226,7 @@ accum_loop:
   eq                    ;; [i == count, i, count, head_idx, tail_idx]
   jumpi @update_head    ;; [i, count, head_idx, tail_idx]
 
-  ;; Precompute record_offset = i*RECORD_SIZE.
+  ;; Precompute record_offset = i*OUT_RECORD_SIZE.
   dup1                  ;; [i, i, count, head_idx, tail_idx]
   push OUT_RECORD_SIZE  ;; [size, i, i, count, head_idx, tail_idx]
   mul                   ;; [record_offset, i, count, head_idx, tail_idx]
@@ -284,24 +283,24 @@ accum_loop:
   push 12*8             ;; [96, addr, src[32:48] ++ tgt[0:16], source[0:32], target[16:32], record_offset, i, ..]
   shl                   ;; [addr<<96, src[32:48] ++ tgt[0:16], source[0:32], target[16:32], record_offset, i, ..]
 
-  ;; Store addr at offset = i*RECORD_SIZE.
+  ;; Store addr at offset = i*OUT_RECORD_SIZE + 1.
   dup5                  ;; [record_offset, addr<<96, src[32:48] ++ tgt[0:16], source[0:32], target[16:32], record_offset, i, ..]
   mstore                ;; [src[32:48] ++ tgt[0:16], source[0:32], target[16:32], record_offset, i, ..]
 
-  ;; Store source[0:32] at offset = i*RECORD_SIZE + 20.
+  ;; Store source[0:32] at offset = i*OUT_RECORD_SIZE + 21.
   swap1                 ;; [source[0:32], src[32:48] ++ tgt[0:16], target[16:32], record_offset, i, ..]
   dup4                  ;; [record_offset, source[0:32], src[32:48] ++ tgt[0:16], target[16:32], record_offset, i, ..]
   push 20               ;; [20, record_offset, source[0:32], src[32:48] ++ tgt[0:16], target[16:32], record_offset, i, ..]
   add                   ;; [record_offset+20, source[0:32], src[32:48] ++ tgt[0:16], target[16:32], record_offset, i, ..]
   mstore                ;; [src[32:48] ++ tgt[0:16], target[16:32], record_offset, i, ..]
 
-  ;; Store src[32:48] ++ tgt[0:16] at offset = i*RECORD_SIZE + 52.
+  ;; Store src[32:48] ++ tgt[0:16] at offset = i*OUT_RECORD_SIZE + 53.
   dup3                  ;; [record_offset, src[32:48] ++ tgt[0:16], target[16:32], record_offset, i, ..]
   push 52               ;; [52, record_offset, src[32:48] ++ tgt[0:16], target[16:32], record_offset, i, ..]
   add                   ;; [record_offset+52, src[32:48] ++ tgt[0:16], target[16:32], record_offset, i, ..]
   mstore                ;; [target[16:32], record_offset, i, ..]
 
-  ;; Store target[16:48] at offset = i*RECORD_SIZE + 84.
+  ;; Store target[16:48] at offset = i*OUT_RECORD_SIZE + 85.
   swap1                 ;; [record_offset, target[16:32], i, ..]
   push 84               ;; [84, record_offset, target[16:32], i, ..]
   add                   ;; [record_offset+84, target[16:32], i, ..]
@@ -398,7 +397,7 @@ store_excess:
   sstore                ;; [count]
 
   ;; Return the requests.
-  push RECORD_SIZE      ;; [record_size, count]
+  push OUT_RECORD_SIZE  ;; [record_size, count]
   mul                   ;; [size]
   push0                 ;; [0, size]
   return                ;; []
