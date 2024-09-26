@@ -36,8 +36,11 @@
 #define FEE_UPDATE_FRACTION 17
 #define EXCESS_INHIBITOR 1181
 
-#define INPUT_SIZE 56   ;; the size of (pubkey ++ amount)
-#define RECORD_SIZE 76  ;; the size of (address ++ pubkey ++ amount)
+#define INPUT_SIZE 56   ;; pubkey ++ amount
+#define RECORD_SIZE 76  ;; address ++ pubkey ++ amount
+
+#define OUT_RECORD_TYPE 0x01
+#define OUT_RECORD_SIZE RECORD_SIZE + 1  ;; type ++ address ++ pubkey ++ amount
 
 ;; -----------------------------------------------------------------------------
 ;; PROGRAM START ---------------------------------------------------------------
@@ -226,8 +229,15 @@ accum_loop:
 
   ;; Precompute record_offset = i*RECORD_SIZE.
   dup1                  ;; [i, i, count, head_idx, tail_idx]
-  push RECORD_SIZE      ;; [size, i, i, count, head_idx, tail_idx]
+  push OUT_RECORD_SIZE  ;; [size, i, i, count, head_idx, tail_idx]
   mul                   ;; [record_offset, i, count, head_idx, tail_idx]
+
+  ;; Store request type to output buffer.
+  push OUT_RECORD_TYPE  ;; [type, record_offset, i, ..]
+  dup2                  ;; [record_offset, type, record_offset, i, ..]
+  mstore8               ;; [record_offset, i, ..]
+  push 1                ;; [inc, record_offset, i, ..]
+  add                   ;; [record_offset, i, ..]
 
   ;; Determine the storage slot of the address for this iteration. This value is
   ;; also the base for the other two storage slots containing the public key and
