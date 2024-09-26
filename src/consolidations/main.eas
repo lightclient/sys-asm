@@ -27,7 +27,7 @@
 #define EXCESS_INHIBITOR 1181
 
 #define INPUT_SIZE 96          ;; source ++ target
-#define LOG_RECORD_SIZE 116    ;; address ++ source ++ target)
+#define LOG_RECORD_SIZE 116    ;; address ++ source ++ target
 #define OUT_RECORD_SIZE 77     ;; type ++ address ++ source ++ target
 #define OUT_RECORD_TYPE 0x02
 
