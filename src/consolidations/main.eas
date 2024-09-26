@@ -143,7 +143,6 @@ check_input:
   swap1                 ;; [slot, target[16:48], ..]
   sstore                ;; [..]
 
-
   ;; Assemble log data.
   caller                ;; [caller, ..]
   push1 96              ;; [96, caller, ..]
@@ -235,8 +234,6 @@ accum_loop:
   push OUT_RECORD_TYPE  ;; [type, record_offset, i, ..]
   dup2                  ;; [record_offset, type, record_offset, i, ..]
   mstore8               ;; [record_offset, i, ..]
-  push 1                ;; [inc, record_offset, i, ..]
-  add                   ;; [record_offset, i, ..]
 
   ;; Determine the storage slot of the address for this iteration. This value is
   ;; also the base for the other storage slots containing the source and the target
@@ -290,20 +287,20 @@ accum_loop:
   ;; Store source[0:32] at offset = i*OUT_RECORD_SIZE + 21.
   swap1                 ;; [source[0:32], src[32:48] ++ tgt[0:16], target[16:32], record_offset, i, ..]
   dup4                  ;; [record_offset, source[0:32], src[32:48] ++ tgt[0:16], target[16:32], record_offset, i, ..]
-  push 20               ;; [20, record_offset, source[0:32], src[32:48] ++ tgt[0:16], target[16:32], record_offset, i, ..]
-  add                   ;; [record_offset+20, source[0:32], src[32:48] ++ tgt[0:16], target[16:32], record_offset, i, ..]
+  push 21               ;; [21, record_offset, source[0:32], src[32:48] ++ tgt[0:16], target[16:32], record_offset, i, ..]
+  add                   ;; [record_offset+21, source[0:32], src[32:48] ++ tgt[0:16], target[16:32], record_offset, i, ..]
   mstore                ;; [src[32:48] ++ tgt[0:16], target[16:32], record_offset, i, ..]
 
   ;; Store src[32:48] ++ tgt[0:16] at offset = i*OUT_RECORD_SIZE + 53.
   dup3                  ;; [record_offset, src[32:48] ++ tgt[0:16], target[16:32], record_offset, i, ..]
-  push 52               ;; [52, record_offset, src[32:48] ++ tgt[0:16], target[16:32], record_offset, i, ..]
-  add                   ;; [record_offset+52, src[32:48] ++ tgt[0:16], target[16:32], record_offset, i, ..]
+  push 53               ;; [53, record_offset, src[32:48] ++ tgt[0:16], target[16:32], record_offset, i, ..]
+  add                   ;; [record_offset+53, src[32:48] ++ tgt[0:16], target[16:32], record_offset, i, ..]
   mstore                ;; [target[16:32], record_offset, i, ..]
 
   ;; Store target[16:48] at offset = i*OUT_RECORD_SIZE + 85.
   swap1                 ;; [record_offset, target[16:32], i, ..]
-  push 84               ;; [84, record_offset, target[16:32], i, ..]
-  add                   ;; [record_offset+84, target[16:32], i, ..]
+  push 85               ;; [85, record_offset, target[16:32], i, ..]
+  add                   ;; [record_offset+85, target[16:32], i, ..]
   mstore                ;; [i, ..]
 
   ;; Increment i.

@@ -235,8 +235,6 @@ accum_loop:
   push OUT_RECORD_TYPE  ;; [type, record_offset, i, ..]
   dup2                  ;; [record_offset, type, record_offset, i, ..]
   mstore8               ;; [record_offset, i, ..]
-  push 1                ;; [inc, record_offset, i, ..]
-  add                   ;; [record_offset, i, ..]
 
   ;; Determine the storage slot of the address for this iteration. This value is
   ;; also the base for the other two storage slots containing the public key and
@@ -299,8 +297,8 @@ accum_loop:
 
   ;; Store pk[0:32] at offset = i*OUT_RECORD_SIZE + 21.
   dup3                  ;; [record_offset, pk[0:32], pk2_am, record_offset, i, ..]
-  push 20               ;; [20, record_offset, pk[0:32], pk2_am, record_offset, i, ..]
-  add                   ;; [record_offset+20, pk[0:32], pk2_am, record_offset, i, ..]
+  push 21               ;; [21, record_offset, pk[0:32], pk2_am, record_offset, i, ..]
+  add                   ;; [record_offset+21, pk[0:32], pk2_am, record_offset, i, ..]
   mstore                ;; [pk2_am, record_offset, i, ..]
 
   ;; Extract pk2 from pk2_am.
@@ -310,8 +308,8 @@ accum_loop:
 
   ;; Store pk2 at offset = i*OUT_RECORD_SIZE + 53.
   dup3                  ;; [record_offset, pk2, pk2_am, record_offset, i, ..]
-  push 52               ;; [52, record_offset, pk2, pk2_am, record_offset, i, ..]
-  add                   ;; [record_offset+52, pk2, pk2_am, record_offset, i, ..]
+  push 53               ;; [53, record_offset, pk2, pk2_am, record_offset, i, ..]
+  add                   ;; [record_offset+53, pk2, pk2_am, record_offset, i, ..]
   mstore                ;; [pk2_am, record_offset, i, ..]
 
   ;; Extract am from pk2_am.
@@ -320,8 +318,8 @@ accum_loop:
 
   ;; Store am at offset = i*OUT_RECORD_SIZE + 69.
   swap1                 ;; [record_offset, am, i, ..]
-  push 68               ;; [68, record_offset, am, i, ..]
-  add                   ;; [record_offset+68, am, i, ..]
+  push 69               ;; [69, record_offset, am, i, ..]
+  add                   ;; [record_offset+69, am, i, ..]
   %mstore_uint64_le()   ;; [i, ..]
 
   ;; Increment i.
