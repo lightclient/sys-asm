@@ -29,13 +29,16 @@
 #define INPUT_SIZE 96    ;; the size of (source ++ target)
 #define RECORD_SIZE 116  ;; the size of (address ++ source ++ target)
 
+#define OUT_RECORD_TYPE 0x02
+#define OUT_RECORD_SIZE RECORD_SIZE + 1  ;; type ++ address ++ source ++ target
+
 ;; -----------------------------------------------------------------------------
 ;; PROGRAM START ---------------------------------------------------------------
 ;; -----------------------------------------------------------------------------
 
 .start:
   ;; Protect the system subroutine by checking if the caller is the system
-  ;; address. 
+  ;; address.
   caller               ;; [caller]
   push20 SYSTEM_ADDR   ;; [sysaddr, caller]
   eq                   ;; [sysaddr == caller]
@@ -177,7 +180,7 @@ check_input:
 ;; with each record being exactly RECORD_SIZE bytes.
 ;;
 ;;  Consolidation request record:
-;; 
+;;
 ;;  +------+--------+--------+
 ;;  | addr | source | target |
 ;;  +------+--------+--------+
@@ -226,8 +229,15 @@ accum_loop:
 
   ;; Precompute record_offset = i*RECORD_SIZE.
   dup1                  ;; [i, i, count, head_idx, tail_idx]
-  push RECORD_SIZE      ;; [size, i, i, count, head_idx, tail_idx]
+  push OUT_RECORD_SIZE  ;; [size, i, i, count, head_idx, tail_idx]
   mul                   ;; [record_offset, i, count, head_idx, tail_idx]
+
+  ;; Store request type to output.
+  push OUT_RECORD_TYPE  ;; [type, record_offset, i, ..]
+  dup2                  ;; [record_offset, type, record_offset, i, ..]
+  mstore8               ;; [record_offset, i, ..]
+  push 1                ;; [inc, record_offset, i, ..]
+  add                   ;; [record_offset, i, ..]
 
   ;; Determine the storage slot of the address for this iteration. This value is
   ;; also the base for the other storage slots containing the source and the target
@@ -273,7 +283,7 @@ accum_loop:
   swap3                 ;; [addr, src[32:48] ++ tgt[0:16], source[0:32], target[16:32], record_offset, i, ..]
   push 12*8             ;; [96, addr, src[32:48] ++ tgt[0:16], source[0:32], target[16:32], record_offset, i, ..]
   shl                   ;; [addr<<96, src[32:48] ++ tgt[0:16], source[0:32], target[16:32], record_offset, i, ..]
-  
+
   ;; Store addr at offset = i*RECORD_SIZE.
   dup5                  ;; [record_offset, addr<<96, src[32:48] ++ tgt[0:16], source[0:32], target[16:32], record_offset, i, ..]
   mstore                ;; [src[32:48] ++ tgt[0:16], source[0:32], target[16:32], record_offset, i, ..]
@@ -339,7 +349,7 @@ update_excess:
   ;; Update the new excess withdrawal requests.
   push SLOT_EXCESS      ;; [excess_slot, count]
   sload                 ;; [excess, count]
-  
+
   ;; Check if excess needs to be reset to 0 for first iteration after
   ;; activation.
   dup1                  ;; [excess, excess, count]
@@ -365,11 +375,11 @@ skip_reset:
   add                   ;; [count+excess, target, count, excess, count]
   gt                    ;; [count+excess > target, count, excess, count]
   jumpi @compute_excess ;; [count, excess, count]
-  
+
   ;; Zero out excess.
   pop                   ;; [excess, count]
   pop                   ;; [count]
-  push0                 
+  push0
   jump @store_excess
 
 compute_excess:
