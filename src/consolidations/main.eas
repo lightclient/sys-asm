@@ -177,12 +177,12 @@ check_input:
 ;; block is reached. The requests are returned as a contiguous array of bytes
 ;; with each record being exactly OUT_RECORD_SIZE bytes.
 ;;
-;;  Consolidation request record:
+;; Consolidation request record:
 ;;
-;;  +------+--------+--------+
-;;  | addr | source | target |
-;;  +------+--------+--------+
-;;     20      48       48
+;;  +------+------+--------+--------+
+;;  | type | addr | source | target |
+;;  +------+------+--------+--------+
+;;     1      20      48       48
 ;;
 ;; Because the requests are stored across SLOTS_PER_ITEM storage slots, there is some
 ;; shuffling to align the data.
@@ -282,6 +282,8 @@ accum_loop:
 
   ;; Store addr at offset = i*OUT_RECORD_SIZE + 1.
   dup5                  ;; [record_offset, addr<<96, src[32:48] ++ tgt[0:16], source[0:32], target[16:32], record_offset, i, ..]
+  push 1                ;; [1, record_offset, addr<<96, src[32:48] ++ tgt[0:16], source[0:32], target[16:32], record_offset, i, ..]
+  add                   ;; [record_offset+1, addr<<96, src[32:48] ++ tgt[0:16], source[0:32], target[16:32], record_offset, i, ..]
   mstore                ;; [src[32:48] ++ tgt[0:16], source[0:32], target[16:32], record_offset, i, ..]
 
   ;; Store source[0:32] at offset = i*OUT_RECORD_SIZE + 21.
