@@ -3,43 +3,32 @@ name: test
 on:
   workflow_dispatch:
   pull_request:
-    types: [opened, reopened]
+  merge_group:
   push:
+    branches: [main]
 
 env:
   FOUNDRY_PROFILE: ci
 
 jobs:
   check:
-    strategy:
-      fail-fast: true
-
     name: Foundry project
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
         with:
           submodules: recursive
-
-      - name: Setup Go
-        uses: actions/setup-go@v4
-
+      - uses: actions/setup-go@v4
       - name: Install Geas
-        run: |
-          go install github.com/fjl/geas/cmd/geas@latest
-
-      - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
+        run: go install github.com/fjl/geas/cmd/geas@latest
+      - uses: foundry-rs/foundry-toolchain@v1
         with:
           version: nightly
-
       - name: Run Forge build
         run: |
           forge --version
           ./build-wrapper build --sizes
         id: build
-
       - name: Run Forge tests
-        run: |
-          ./build-wrapper test -vvv
+        run: ./build-wrapper test -vvv
         id: test
