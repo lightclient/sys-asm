@@ -5,6 +5,7 @@ import "./Test.sol";
 
 uint256 constant target_per_block = 2;
 uint256 constant max_per_block = 16;
+uint64 constant outputRecordSize = 77;
 
 contract WithdrawalsTest is Test {
   address unit;
@@ -51,11 +52,11 @@ contract WithdrawalsTest is Test {
     assertExcess(0);
 
     bytes memory req = getRequests();
-    assertEq(req.length, 76);
+    assertEq(req.length, 1*outputRecordSize);
     assertEq(bytes20(req), bytes20(address(this)));            // check addr
-    assertEq(toFixed(req, 20, 52), toFixed(exp_req, 0, 32));   // check pk1
-    assertEq(toFixed(req, 52, 68), toFixed(exp_req, 32, 48));  // check pk2
-    assertEq(toFixed(req, 68, 76), toFixed(exp_req, 48, 56));  // check amt
+    assertEq(toFixed(req, 21, 53), toFixed(exp_req, 0, 32));   // check pk1
+    assertEq(toFixed(req, 53, 69), toFixed(exp_req, 32, 48));  // check pk2
+    assertEq(toFixed(req, 69, 77), toFixed(exp_req, 48, 56));  // check amt
     assertStorage(count_slot, 0, "unexpected request count");
     assertExcess(0);
   }
@@ -193,21 +194,21 @@ contract WithdrawalsTest is Test {
   function checkWithdrawals(uint256 startIndex, uint256 count) internal returns (uint256) {
     bytes memory amountBuffer = new bytes(8);
     bytes memory requests = getRequests();
-    assertEq(requests.length, count*76);
+    assertEq(requests.length, count*outputRecordSize);
 
     for (uint256 i = 0; i < count; i++) {
-      uint256 offset = i*76;
+      uint256 offset = i*outputRecordSize;
       uint256 wdIndex = startIndex + i;
       bytes memory wd = makeWithdrawal(wdIndex);
 
       // Check address, pubkey.
-      assertEq(toFixed(requests, offset, offset+20) >> 96, uint256(wdIndex), "unexpected request address returned");
-      assertEq(toFixed(requests, offset+20, offset+52), toFixed(wd, 0, 32), "unexpected request pk1 returned");
-      assertEq(toFixed(requests, offset+52, offset+68), toFixed(wd, 32, 48), "unexpected request pk2 returned");
+      assertEq(toFixed(requests, offset+1, offset+21) >> 96, uint256(wdIndex), "unexpected request address returned");
+      assertEq(toFixed(requests, offset+21, offset+53), toFixed(wd, 0, 32), "unexpected request pk1 returned");
+      assertEq(toFixed(requests, offset+53, offset+69), toFixed(wd, 32, 48), "unexpected request pk2 returned");
 
       // Check amount.
       for (uint j = 0; j < 8; j++) {
-         amountBuffer[j] = requests[offset+68+j];
+         amountBuffer[j] = requests[offset+69+j];
       }
       bytes memory wantAmount = hex"de852726f6fb9f2d";
       assertEq(amountBuffer, wantAmount, "unexpected request amount returned");
