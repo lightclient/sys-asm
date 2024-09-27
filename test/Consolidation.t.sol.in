@@ -6,6 +6,8 @@ import "./Test.sol";
 uint256 constant target_per_block = 1;
 uint256 constant max_per_block = 1;
 
+uint64 constant outputRecordSize = 117;
+
 contract ConsolidationTest is Test {
 
   function setUp() public {
@@ -49,10 +51,10 @@ contract ConsolidationTest is Test {
     assertExcess(0);
 
     bytes memory req = getRequests();
-    assertEq(req.length, 116);
-    assertEq(toFixed(req, 20, 52), toFixed(data, 0, 32));
-    assertEq(toFixed(req, 52, 84), toFixed(data, 32, 64));
-    assertEq(toFixed(req, 84, 116), toFixed(data, 64, 96));
+    assertEq(req.length, outputRecordSize);
+    assertEq(toFixed(req, 21, 53), toFixed(data, 0, 32));
+    assertEq(toFixed(req, 53, 85), toFixed(data, 32, 64));
+    assertEq(toFixed(req, 85, 117), toFixed(data, 64, 96));
     assertStorage(count_slot, 0, "unexpected request count");
     assertExcess(0);
   }
@@ -192,13 +194,13 @@ contract ConsolidationTest is Test {
   // uint8(index), repeating.
   function checkConsolidations(uint256 startIndex, uint256 count) internal returns (uint256) {
     bytes memory requests = getRequests();
-    assertEq(requests.length, count*116);
+    assertEq(requests.length, count*outputRecordSize);
     for (uint256 i = 0; i < count; i++) {
-      uint256 offset = i*116;
-      assertEq(toFixed(requests, offset, offset+20) >> 96, uint256(startIndex+i), "unexpected request address returned");
-      assertEq(toFixed(requests, offset+20, offset+52), toFixed(makeConsolidation(startIndex+i), 0, 32), "unexpected source[0:32] returned");
-      assertEq(toFixed(requests, offset+52, offset+84), toFixed(makeConsolidation(startIndex+i), 32, 64), "unexpected source[32:48] ++ target[0:16] returned");
-      assertEq(toFixed(requests, offset+84, offset+116), toFixed(makeConsolidation(startIndex+i), 64, 96), "unexpected target[16:48] returned");
+      uint256 offset = i*outputRecordSize;
+      assertEq(toFixed(requests, offset+1, offset+21) >> 96, uint256(startIndex+i), "unexpected request address returned");
+      assertEq(toFixed(requests, offset+21, offset+53), toFixed(makeConsolidation(startIndex+i), 0, 32), "unexpected source[0:32] returned");
+      assertEq(toFixed(requests, offset+53, offset+85), toFixed(makeConsolidation(startIndex+i), 32, 64), "unexpected source[32:48] ++ target[0:16] returned");
+      assertEq(toFixed(requests, offset+85, offset+117), toFixed(makeConsolidation(startIndex+i), 64, 96), "unexpected target[16:48] returned");
     }
     return count;
   }
