@@ -52,9 +52,9 @@ contract ConsolidationTest is Test {
 
     bytes memory req = getRequests();
     assertEq(req.length, outputRecordSize);
-    assertEq(toFixed(req, 21, 53), toFixed(data, 0, 32));
-    assertEq(toFixed(req, 53, 85), toFixed(data, 32, 64));
-    assertEq(toFixed(req, 85, 117), toFixed(data, 64, 96));
+    assertEq(uint8(req[0]), 0x02, "wrong request type");
+    assertEq(bytes20(slice(req, 1, 21)), bytes20(address(this)), "wrong address");
+    assertEq(slice(req, 21, 117), data, "wrong request data");
     assertStorage(count_slot, 0, "unexpected request count");
     assertExcess(0);
   }
@@ -121,18 +121,18 @@ contract ConsolidationTest is Test {
     uint256 excess = count - target_per_block;
 
     // Attempt to add an invalid request with fee too low or a valid request.
-    // This should cause the excess requests counter to either decrease by 1 
+    // This should cause the excess requests counter to either decrease by 1
     // or remain the same each iteration.
     for (uint256 i = 0; i < count; i++) {
       assertExcess(excess);
-      
+
       uint256 fee = computeFee(excess);
       if (idx % 2 == 0) {
         addRequest(address(uint160(idx)), makeConsolidation(idx), fee);
       } else {
         addFailedRequest(address(uint160(idx)), makeConsolidation(idx), fee-1);
       }
-      
+
       uint256 expected = min(idx-read+1, max_per_block);
       checkConsolidations(read, expected);
 
@@ -142,7 +142,6 @@ contract ConsolidationTest is Test {
       read += expected;
       idx++;
     }
-
   }
 
   // testInhibitorRest verifies that after the first system call the excess
@@ -195,8 +194,10 @@ contract ConsolidationTest is Test {
   function checkConsolidations(uint256 startIndex, uint256 count) internal returns (uint256) {
     bytes memory requests = getRequests();
     assertEq(requests.length, count*outputRecordSize);
+
     for (uint256 i = 0; i < count; i++) {
       uint256 offset = i*outputRecordSize;
+      assertEq(uint8(requests[offset]), 0x02, "unexpected request type returned");
       assertEq(toFixed(requests, offset+1, offset+21) >> 96, uint256(startIndex+i), "unexpected request address returned");
       assertEq(toFixed(requests, offset+21, offset+53), toFixed(makeConsolidation(startIndex+i), 0, 32), "unexpected source[0:32] returned");
       assertEq(toFixed(requests, offset+53, offset+85), toFixed(makeConsolidation(startIndex+i), 32, 64), "unexpected source[32:48] ++ target[0:16] returned");
