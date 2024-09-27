@@ -175,12 +175,12 @@ check_input:
 ;; This is the logic executed by the protocol each block. It reads as many
 ;; requests as available from the queue, until the max request per
 ;; block is reached. The requests are returned as a contiguous array of bytes
-;; with each record being exactly OUT_RECORD_SIZE bytes.
+;; with each record being exactly 117 bytes.
 ;;
 ;; Consolidation request record:
 ;;
 ;;  +------+------+--------+--------+
-;;  | type | addr | source | target |
+;;  | 0x02 | addr | source | target |
 ;;  +------+------+--------+--------+
 ;;     1      20      48       48
 ;;
