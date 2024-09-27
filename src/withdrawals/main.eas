@@ -176,14 +176,14 @@ check_input:
 ;; This is the logic executed by the protocol each block. It reads as many
 ;; requests as available from the queue, until the max withdrawal request per
 ;; block is reached. The requests are returned as a contiguous array of bytes
-;; with each record being exactly 76 bytes.
+;; with each record being exactly 77 bytes.
 ;;
-;;  Withdrawal request record:
+;; Withdrawal request record:
 ;;
-;;  +------+--------+--------+
-;;  | addr | pubkey | amount |
-;;  +------+--------+--------+
-;;     20      48        8
+;;  +------+------+--------+--------+
+;;  | type | addr | pubkey | amount |
+;;  +------+------+--------+--------+
+;;     1      20      48        8
 ;;
 ;; Because the requests are stored across three storage slots, there is some
 ;; shuffling to align the data.
