@@ -230,11 +230,6 @@ accum_loop:
   push OUT_RECORD_SIZE  ;; [size, i, i, count, head_idx, tail_idx]
   mul                   ;; [record_offset, i, count, head_idx, tail_idx]
 
-  ;; Store request type to output.
-  push OUT_RECORD_TYPE  ;; [type, record_offset, i, ..]
-  dup2                  ;; [record_offset, type, record_offset, i, ..]
-  mstore8               ;; [record_offset, i, ..]
-
   ;; Determine the storage slot of the address for this iteration. This value is
   ;; also the base for the other storage slots containing the source and the target
   ;; public keys. The base slot will be (queue_offset + (queue_head + i)*SLOTS_PER_ITEM).
@@ -274,6 +269,11 @@ accum_loop:
   ;; four storage elements
   ;; (addr, source[0:32], source[32:48] ++ target[0:16], target[16:48])
   ;; so there is no padding.
+
+  ;; Store request type to output.
+  push OUT_RECORD_TYPE  ;; [type, target[16:32], src[32:48] ++ tgt[0:16], source[0:32], addr, record_offset, i, ..]
+  dup6                  ;; [record_offset, type, target[16:32], src[32:48] ++ tgt[0:16], source[0:32], addr, record_offset, i, ..]
+  mstore8               ;; [target[16:32], src[32:48] ++ tgt[0:16], source[0:32], addr, record_offset, i, ..]
 
   ;; Shift addr bytes.
   swap3                 ;; [addr, src[32:48] ++ tgt[0:16], source[0:32], target[16:32], record_offset, i, ..]
