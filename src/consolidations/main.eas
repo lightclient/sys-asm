@@ -217,7 +217,7 @@ begin_loop:
   push0                 ;; [i, count, head_idx, tail_idx]
 
 accum_loop:
-  ;; This loop will read each request and byte bang it into a OUT_RECORD_SIZE byte chunk.
+  ;; This loop will read each request and byte bang it into an OUT_RECORD_SIZE byte chunk.
 
   ;; Bounds check, ensure i < count.
   dup2                  ;; [count, i, count, head_idx, tail_idx]
