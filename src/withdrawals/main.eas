@@ -181,9 +181,9 @@ check_input:
 ;; Withdrawal request record:
 ;;
 ;;  +------+------+--------+--------+
-;;  | type | addr | pubkey | amount |
+;;  | 0x01 | addr | pubkey | amount |
 ;;  +------+------+--------+--------+
-;;     1      20      48        8
+;;     1      20      48       8
 ;;
 ;; Because the requests are stored across three storage slots, there is some
 ;; shuffling to align the data.
