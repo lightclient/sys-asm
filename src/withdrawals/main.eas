@@ -231,11 +231,6 @@ accum_loop:
   push OUT_RECORD_SIZE  ;; [size, i, i, count, head_idx, tail_idx]
   mul                   ;; [record_offset, i, count, head_idx, tail_idx]
 
-  ;; Store request type to output buffer.
-  push OUT_RECORD_TYPE  ;; [type, record_offset, i, ..]
-  dup2                  ;; [record_offset, type, record_offset, i, ..]
-  mstore8               ;; [record_offset, i, ..]
-
   ;; Determine the storage slot of the address for this iteration. This value is
   ;; also the base for the other two storage slots containing the public key and
   ;; amount. The base slot will be (queue_offset + queue_head*3 + i*3).
@@ -286,6 +281,11 @@ accum_loop:
   ;;
   ;;  (A[12:32] ++ B[0:12], B[12:32] ++ C[0:12], C[12:24])
 
+  ;; Store request type at offset = i*OUT_RECORD_SIZE.
+  push OUT_RECORD_TYPE  ;; [type, pk2_am, pk[0:32], addr, record_offset, i, ..]
+  dup5                  ;; [record_offset, type, pk2_am, pk[0:32], addr, record_offset, i, ..]
+  mstore8               ;; [pk2_am, pk[0:32], addr, record_offset, i, ..]
+
   ;; Shift addr bytes.
   swap2                 ;; [addr, pk[0:32], pk2_am, record_offset, i, ..]
   push 12*8             ;; [96, addr, pk[0:32], pk2_am, record_offset, i, ..]
@@ -293,6 +293,8 @@ accum_loop:
 
   ;; Store addr at offset = i*OUT_RECORD_SIZE + 1.
   dup4                  ;; [record_offset, addr<<96, pk[0:32], pk2_am, record_offset, i, ..]
+  push 1                ;; [1, record_offset, addr<<96, pk[0:32], pk2_am, record_offset, i, ..]
+  add                   ;; [record_offset+1, addr<<96, pk[0:32], pk2_am, record_offset, i, ..]
   mstore                ;; [pk[0:32], pk2_am, record_offset, i, ..]
 
   ;; Store pk[0:32] at offset = i*OUT_RECORD_SIZE + 21.
