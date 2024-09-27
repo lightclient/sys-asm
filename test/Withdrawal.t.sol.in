@@ -52,12 +52,13 @@ contract WithdrawalsTest is Test {
     assertExcess(0);
 
     bytes memory req = getRequests();
-    assertEq(req.length, 1*outputRecordSize);
-    assertEq(bytes20(req), bytes20(address(this)));            // check addr
-    assertEq(toFixed(req, 21, 53), toFixed(exp_req, 0, 32));   // check pk1
-    assertEq(toFixed(req, 53, 69), toFixed(exp_req, 32, 48));  // check pk2
-    assertEq(toFixed(req, 69, 77), toFixed(exp_req, 48, 56));  // check amt
-    assertStorage(count_slot, 0, "unexpected request count");
+    assertEq(req.length, 1*outputRecordSize, "wrong return data size");
+    assertEq(uint8(req[0]), 0x01, "wrong request type");
+    assertEq(bytes20(slice(req, 1, 21)), bytes20(address(this)), "wrong address");
+    assertEq(toFixed(req, 21, 53), toFixed(exp_req, 0, 32), "wrong pk1");
+    assertEq(toFixed(req, 53, 69), toFixed(exp_req, 32, 48), "wrong pk2");
+    assertEq(toFixed(req, 69, 77), toFixed(exp_req, 48, 56), "wrong amount");
+    assertStorage(count_slot, 0, "unexpected request count in storage");
     assertExcess(0);
   }
 
@@ -142,7 +143,6 @@ contract WithdrawalsTest is Test {
       read += expected;
       idx++;
     }
-
   }
 
   // testInhibitorRest verifies that after the first system call the excess
@@ -201,7 +201,8 @@ contract WithdrawalsTest is Test {
       uint256 wdIndex = startIndex + i;
       bytes memory wd = makeWithdrawal(wdIndex);
 
-      // Check address, pubkey.
+      // Check type, address, pubkey.
+      assertEq(uint8(requests[offset]), 0x01, "unexpected request type returned");
       assertEq(toFixed(requests, offset+1, offset+21) >> 96, uint256(wdIndex), "unexpected request address returned");
       assertEq(toFixed(requests, offset+21, offset+53), toFixed(wd, 0, 32), "unexpected request pk1 returned");
       assertEq(toFixed(requests, offset+53, offset+69), toFixed(wd, 32, 48), "unexpected request pk2 returned");
