@@ -145,7 +145,7 @@ contract WithdrawalsTest is Test {
 
   }
 
-  // testInhibitorRest verifies that after the first system call the excess
+  // testInhibitorReset verifies that after the first system call the excess
   // value is reset to 0.
   function testInhibitorReset() public {
     vm.store(addr, bytes32(0), bytes32(inhibitor));

@@ -144,13 +144,16 @@ contract ConsolidationTest is Test {
 
   }
 
-  // testInhibitorRest verifies that after the first system call the excess
+  // testInhibitorReset verifies that after the first system call the excess
   // value is reset to 0.
   function testInhibitorReset() public {
     vm.store(addr, bytes32(0), bytes32(inhibitor));
     vm.prank(sysaddr);
     (bool ret, bytes memory data) = addr.call("");
     assertStorage(excess_slot, 0, "expected excess requests to be reset");
+
+    vm.store(addr, bytes32(0), bytes32(inhibitor));
+    addFailedRequest(address(uint160(0)), makeConsolidation(0), inhibitor);
 
     vm.store(addr, bytes32(0), bytes32(inhibitor-1));
     vm.prank(sysaddr);
