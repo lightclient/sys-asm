@@ -52,11 +52,12 @@ contract WithdrawalsTest is Test {
     assertExcess(0);
 
     bytes memory req = getRequests();
-    assertEq(req.length, 76);
-    assertEq(bytes20(req), bytes20(address(this)));            // check addr
-    assertEq(toFixed(req, 20, 52), toFixed(exp_req, 0, 32));   // check pk1
-    assertEq(toFixed(req, 52, 68), toFixed(exp_req, 32, 48));  // check pk2
-    assertEq(toFixed(req, 68, 76), toFixed(exp_req, 48, 56));  // check amt
+    assertEq(req.length, 77);
+    assertEq(uint8(req[0]), 0x01, "wrong request type prefix");
+    assertEq(bytes20(slice(req, 1, 21)), bytes20(address(this)), "wrong address");
+    assertEq(toFixed(req, 21, 53), toFixed(exp_req, 0, 32), "wrong pk1");
+    assertEq(toFixed(req, 53, 69), toFixed(exp_req, 32, 48), "wrong pk2");
+    assertEq(toFixed(req, 69, 77), toFixed(exp_req, 48, 56), "wrong amount");
     assertStorage(count_slot, 0, "unexpected request count");
     assertExcess(0);
   }
@@ -197,10 +198,11 @@ contract WithdrawalsTest is Test {
   function checkWithdrawals(uint256 startIndex, uint256 count) internal returns (uint256) {
     bytes memory amountBuffer = new bytes(8);
     bytes memory requests = getRequests();
-    assertEq(requests.length, count*76);
+    assertEq(requests.length, count*76 + 1);
+    assertEq(uint8(requests[0]), 0x01);
 
     for (uint256 i = 0; i < count; i++) {
-      uint256 offset = i*76;
+      uint256 offset = i*76 + 1;
       uint256 wdIndex = startIndex + i;
       bytes memory wd = makeWithdrawal(wdIndex);
 
