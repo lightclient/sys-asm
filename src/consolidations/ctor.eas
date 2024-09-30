@@ -1,7 +1,6 @@
-;; Store 1181 as a temporary excess value as it creates a fee so large that no
-;; request will be accepted in the queue until after 7002 is activated and
-;; called by the system for the first time.
-push 1181
+;; Store 0xff..ff as a temporary excess value to avoid requests being queued
+;; before the fork.
+push 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
 push0
 sstore
 
