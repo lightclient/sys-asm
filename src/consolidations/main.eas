@@ -29,6 +29,8 @@
 #define INPUT_SIZE 96    ;; the size of (source ++ target)
 #define RECORD_SIZE 116  ;; the size of (address ++ source ++ target)
 
+#define REQUEST_TYPE 0x02
+
 ;; -----------------------------------------------------------------------------
 ;; PROGRAM START ---------------------------------------------------------------
 ;; -----------------------------------------------------------------------------
@@ -220,7 +222,13 @@ read_requests:
   push MAX_PER_BLOCK    ;; [count, head_idx, tail_idx]
 
 begin_loop:
-  push0                 ;; [i, count, head_idx, tail_idx]
+  ;; Store request type prefix into the output buffer.
+  push1 REQUEST_TYPE    ;; [type, count, head_idx, tail_idx]
+  push 0                ;; [offset, type, count, head_idx, tail_idx]
+  mstore8               ;; [count, head_idx, tail_idx]
+
+  ;; Push initial loop index.
+  push 0                ;; [i, count, head_idx, tail_idx]
 
 accum_loop:
   ;; This loop will read each request and byte bang it into a RECORD_SIZE byte chunk.
@@ -234,7 +242,9 @@ accum_loop:
   ;; Precompute record_offset = i*RECORD_SIZE.
   dup1                  ;; [i, i, count, head_idx, tail_idx]
   push RECORD_SIZE      ;; [size, i, i, count, head_idx, tail_idx]
-  mul                   ;; [record_offset, i, count, head_idx, tail_idx]
+  mul                   ;; [offset, i, count, head_idx, tail_idx]
+  push 1                ;; [1, offset, i, count, head_idx, tail_idx]
+  add                   ;; [record_offset, i, count, head_idx, tail_idx]
 
   ;; Determine the storage slot of the address for this iteration. This value is
   ;; also the base for the other storage slots containing the source and the target
@@ -396,7 +406,9 @@ store_excess:
 
   ;; Return the requests.
   push RECORD_SIZE      ;; [record_size, count]
-  mul                   ;; [size]
+  mul                   ;; [size, count]
+  push 1                ;; [1, size, count]
+  add                   ;; [size+1, count]
   push0                 ;; [0, size]
   return                ;; []
 
