@@ -34,7 +34,7 @@
 #define TARGET_PER_BLOCK 2
 #define MAX_PER_BLOCK 16
 #define FEE_UPDATE_FRACTION 17
-#define EXCESS_INHIBITOR 1181
+#define EXCESS_INHIBITOR 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
 
 #define INPUT_SIZE 56   ;; the size of (pubkey ++ amount)
 #define RECORD_SIZE 76  ;; the size of (address ++ pubkey ++ amount)
@@ -94,6 +94,13 @@ check_input:
   push FEE_UPDATE_FRACTION
   push SLOT_EXCESS      ;; [excess_slot, update_fraction]
   sload                 ;; [excess, update_fraction]
+
+  ;; Check if the pre-fork inhibitor is still active, revert if so.
+  dup1                  ;; [excess, excess, update_fraction]
+  push EXCESS_INHIBITOR ;; [inhibitor, excess, excess, update_fraction]
+  eq                    ;; [inhibitor == excess, excess, update_fraction]
+  jumpi @revert         ;; [excess, update_fraction]
+
   push MIN_FEE          ;; [min_fee, excess, update_fraction]
   #include "../common/fake_expo.eas"
 
