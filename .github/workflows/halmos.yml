@@ -31,7 +31,7 @@ jobs:
           version: nightly
 
       - name: Install Halmos
-        run: pip install git+https://github.com/a16z/halmos.git@feat/multi-calldata
+        run: pip install git+https://github.com/a16z/halmos.git
 
       - name: Install Yices 2.6.4
         run: |
