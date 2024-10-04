@@ -1,0 +1,46 @@
+name: halmos
+
+on:
+  schedule:
+    - cron: "0 1 * * *"
+  workflow_dispatch:
+
+jobs:
+  halmos:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.12
+
+      - name: Setup Go
+        uses: actions/setup-go@v4
+
+      - name: Install Geas
+        run: go install github.com/fjl/geas/cmd/geas@latest
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
+      - name: Install Halmos
+        run: pip install git+https://github.com/a16z/halmos.git@feat/multi-calldata
+
+      - name: Install Yices 2.6.4
+        run: |
+          wget -q https://github.com/SRI-CSL/yices2/releases/download/Yices-2.6.4/yices-2.6.4-x86_64-pc-linux-gnu.tar.gz
+          sudo tar -xzf yices-2.6.4-x86_64-pc-linux-gnu.tar.gz -C /usr/local --strip-components=1
+          sudo rm yices-2.6.4-x86_64-pc-linux-gnu.tar.gz
+
+      - name: Build
+        run: ./build-wrapper build
+
+      - name: Run Halmos
+        run: halmos --solver-threads 3 --solver-timeout-assertion 0
