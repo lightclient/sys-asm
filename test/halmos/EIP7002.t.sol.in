@@ -21,8 +21,8 @@ contract EIP7002Test is SymTest, Test {
     uint constant MIN_WITHDRAWAL_REQUEST_FEE = 1;
     uint constant WITHDRAWAL_REQUEST_FEE_UPDATE_FRACTION = 17;
 
-    // TODO: figure out the meaning of this magic value
-    uint constant EXCESS_INHIBITOR = 1181;
+    // NOTE: this is not specified in EIP-7002; for more context, see: https://github.com/lightclient/sys-asm/pull/26
+    uint constant EXCESS_INHIBITOR = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
 
     struct State {
         uint balance;
@@ -102,7 +102,8 @@ contract EIP7002Test is SymTest, Test {
 
         // assume valid initial state
         // TODO: compute the max value based on practical fee limit
-        vm.assume(initState.excess < 2**64);
+        // NOTE: excess is set to uint256_max until the hard fork
+        // vm.assume(initState.excess < 2**64);
         vm.assume(initState.count < 2**64);
         vm.assume(initState.queueHeadIndex <= initState.queueTailIndex);
         vm.assume(initState.queueTailIndex < 2**64);
@@ -169,8 +170,11 @@ contract EIP7002Test is SymTest, Test {
                 // ensure empty return data
                 assertEq(retdata.length, 0);
             } else {
-                // ensure that the failure is only due to insufficient fee
-                assertLt(value, _getFee());
+                // NOTE: the contract immediately reverts when excess == EXCESS_INHIBITOR
+                if (initState.excess != EXCESS_INHIBITOR) {
+                    // ensure that the failure is only due to insufficient fee
+                    assertLt(value, _getFee());
+                }
             }
         } else {
             // ensure revert when calldatasize is neither 0 nor 56
@@ -196,7 +200,7 @@ contract EIP7002Test is SymTest, Test {
         if (initState.excess != EXCESS_INHIBITOR) {
             assertEq(newState.excess, subcap(initState.excess + initState.count, TARGET_WITHDRAWAL_REQUESTS_PER_BLOCK));
         } else {
-            // TODO: figure out the purpose of this logic
+            // at the fork block
             assertEq(newState.excess, subcap(                   initState.count, TARGET_WITHDRAWAL_REQUESTS_PER_BLOCK));
         }
 
