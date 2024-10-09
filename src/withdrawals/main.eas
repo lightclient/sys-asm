@@ -46,11 +46,10 @@
 .start:
   ;; Protect the system subroutine by checking if the caller is the system
   ;; address.
-  caller               ;; [caller]
-  push20 SYSTEM_ADDR   ;; [sysaddr, caller]
-  eq                   ;; [sysaddr == caller]
-  push1 @read_requests ;; [read_lbl, sysaddr == caller]
-  jumpi                ;; []
+  caller                ;; [caller]
+  push20 SYSTEM_ADDR    ;; [sysaddr, caller]
+  eq                    ;; [sysaddr == caller]
+  jumpi @read_requests  ;; []
 
   ;; ---------------------------------------------------------------------------
   ;; USER SUBROUTINE -----------------------------------------------------------
@@ -65,6 +64,12 @@
   iszero                ;; [calldatasize == 0]
   iszero                ;; [calldatasize != 0]
   jumpi @check_input
+
+  ;; Reject any callvalue here to prevent lost funds.
+  callvalue             ;; [value]
+  iszero                ;; [value == 0]
+  iszero                ;; [value != 0]
+  jumpi @revert
 
   ;; Load excess withdrawal requests and return the value.
   push SLOT_EXCESS      ;; [excess_reqs_slot]

@@ -35,12 +35,11 @@
 
 .start:
   ;; Protect the system subroutine by checking if the caller is the system
-  ;; address. 
-  caller               ;; [caller]
-  push20 SYSTEM_ADDR   ;; [sysaddr, caller]
-  eq                   ;; [sysaddr == caller]
-  push1 @read_requests ;; [read_lbl, sysaddr == caller]
-  jumpi                ;; []
+  ;; address.
+  caller                ;; [caller]
+  push20 SYSTEM_ADDR    ;; [sysaddr, caller]
+  eq                    ;; [sysaddr == caller]
+  jumpi @read_requests  ;; []
 
   ;; ---------------------------------------------------------------------------
   ;; USER SUBROUTINE -----------------------------------------------------------
@@ -55,6 +54,12 @@
   iszero                ;; [calldatasize == 0]
   iszero                ;; [calldatasize != 0]
   jumpi @check_input
+
+  ;; Reject any callvalue here to prevent lost funds.
+  callvalue             ;; [value]
+  iszero                ;; [value == 0]
+  iszero                ;; [value != 0]
+  jumpi @revert
 
   ;; Load excess requests and return the value.
   push SLOT_EXCESS      ;; [excess_reqs_slot]
@@ -184,7 +189,7 @@ check_input:
 ;; with each record being exactly RECORD_SIZE bytes.
 ;;
 ;;  Consolidation request record:
-;; 
+;;
 ;;  +------+--------+--------+
 ;;  | addr | source | target |
 ;;  +------+--------+--------+
@@ -280,7 +285,7 @@ accum_loop:
   swap3                 ;; [addr, src[32:48] ++ tgt[0:16], source[0:32], target[16:32], record_offset, i, ..]
   push 12*8             ;; [96, addr, src[32:48] ++ tgt[0:16], source[0:32], target[16:32], record_offset, i, ..]
   shl                   ;; [addr<<96, src[32:48] ++ tgt[0:16], source[0:32], target[16:32], record_offset, i, ..]
-  
+
   ;; Store addr at offset = i*RECORD_SIZE.
   dup5                  ;; [record_offset, addr<<96, src[32:48] ++ tgt[0:16], source[0:32], target[16:32], record_offset, i, ..]
   mstore                ;; [src[32:48] ++ tgt[0:16], source[0:32], target[16:32], record_offset, i, ..]
@@ -346,7 +351,7 @@ update_excess:
   ;; Update the new excess consolidation requests.
   push SLOT_EXCESS      ;; [excess_slot, count]
   sload                 ;; [excess, count]
-  
+
   ;; Check if excess needs to be reset to 0 for first iteration after
   ;; activation.
   dup1                  ;; [excess, excess, count]
@@ -372,11 +377,11 @@ skip_reset:
   add                   ;; [count+excess, target, count, excess, count]
   gt                    ;; [count+excess > target, count, excess, count]
   jumpi @compute_excess ;; [count, excess, count]
-  
+
   ;; Zero out excess.
   pop                   ;; [excess, count]
   pop                   ;; [count]
-  push0                 
+  push0
   jump @store_excess
 
 compute_excess:
