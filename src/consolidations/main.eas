@@ -29,13 +29,15 @@
 #define INPUT_SIZE 96    ;; the size of (source ++ target)
 #define RECORD_SIZE 116  ;; the size of (address ++ source ++ target)
 
+#define REQUEST_TYPE 0x02
+
 ;; -----------------------------------------------------------------------------
 ;; PROGRAM START ---------------------------------------------------------------
 ;; -----------------------------------------------------------------------------
 
 .start:
   ;; Protect the system subroutine by checking if the caller is the system
-  ;; address. 
+  ;; address.
   caller               ;; [caller]
   push20 SYSTEM_ADDR   ;; [sysaddr, caller]
   eq                   ;; [sysaddr == caller]
@@ -184,7 +186,7 @@ check_input:
 ;; with each record being exactly RECORD_SIZE bytes.
 ;;
 ;;  Consolidation request record:
-;; 
+;;
 ;;  +------+--------+--------+
 ;;  | addr | source | target |
 ;;  +------+--------+--------+
@@ -220,7 +222,13 @@ read_requests:
   push MAX_PER_BLOCK    ;; [count, head_idx, tail_idx]
 
 begin_loop:
-  push0                 ;; [i, count, head_idx, tail_idx]
+  ;; Store request type prefix into the output buffer.
+  push1 REQUEST_TYPE    ;; [type, count, head_idx, tail_idx]
+  push 0                ;; [offset, type, count, head_idx, tail_idx]
+  mstore8               ;; [count, head_idx, tail_idx]
+
+  ;; Push initial loop index.
+  push 0                ;; [i, count, head_idx, tail_idx]
 
 accum_loop:
   ;; This loop will read each request and byte bang it into a RECORD_SIZE byte chunk.
@@ -234,7 +242,9 @@ accum_loop:
   ;; Precompute record_offset = i*RECORD_SIZE.
   dup1                  ;; [i, i, count, head_idx, tail_idx]
   push RECORD_SIZE      ;; [size, i, i, count, head_idx, tail_idx]
-  mul                   ;; [record_offset, i, count, head_idx, tail_idx]
+  mul                   ;; [offset, i, count, head_idx, tail_idx]
+  push 1                ;; [1, offset, i, count, head_idx, tail_idx]
+  add                   ;; [record_offset, i, count, head_idx, tail_idx]
 
   ;; Determine the storage slot of the address for this iteration. This value is
   ;; also the base for the other storage slots containing the source and the target
@@ -280,7 +290,7 @@ accum_loop:
   swap3                 ;; [addr, src[32:48] ++ tgt[0:16], source[0:32], target[16:32], record_offset, i, ..]
   push 12*8             ;; [96, addr, src[32:48] ++ tgt[0:16], source[0:32], target[16:32], record_offset, i, ..]
   shl                   ;; [addr<<96, src[32:48] ++ tgt[0:16], source[0:32], target[16:32], record_offset, i, ..]
-  
+
   ;; Store addr at offset = i*RECORD_SIZE.
   dup5                  ;; [record_offset, addr<<96, src[32:48] ++ tgt[0:16], source[0:32], target[16:32], record_offset, i, ..]
   mstore                ;; [src[32:48] ++ tgt[0:16], source[0:32], target[16:32], record_offset, i, ..]
@@ -346,7 +356,7 @@ update_excess:
   ;; Update the new excess consolidation requests.
   push SLOT_EXCESS      ;; [excess_slot, count]
   sload                 ;; [excess, count]
-  
+
   ;; Check if excess needs to be reset to 0 for first iteration after
   ;; activation.
   dup1                  ;; [excess, excess, count]
@@ -372,11 +382,11 @@ skip_reset:
   add                   ;; [count+excess, target, count, excess, count]
   gt                    ;; [count+excess > target, count, excess, count]
   jumpi @compute_excess ;; [count, excess, count]
-  
+
   ;; Zero out excess.
   pop                   ;; [excess, count]
   pop                   ;; [count]
-  push0                 
+  push0
   jump @store_excess
 
 compute_excess:
@@ -396,7 +406,9 @@ store_excess:
 
   ;; Return the requests.
   push RECORD_SIZE      ;; [record_size, count]
-  mul                   ;; [size]
+  mul                   ;; [size, count]
+  push 1                ;; [1, size, count]
+  add                   ;; [size+1, count]
   push0                 ;; [0, size]
   return                ;; []
 

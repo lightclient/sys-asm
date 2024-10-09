@@ -74,6 +74,17 @@ function toFixed(bytes memory data, uint256 start, uint256 end) pure returns (ui
   return uint256(bytes32(out));
 }
 
+// slice copys data from memory. If the length is less than 32,
+// the output is right-padded with zeros.
+function slice(bytes memory data, uint start, uint end) pure returns (bytes memory) {
+  require(end > start, "invalid range (end > start)");
+  bytes memory out = new bytes(end-start);
+  for (uint i = start; i < end; i++) {
+    out[i-start] = data[i];
+  }
+  return out;
+}
+
 // computeFee calls the fake exponentiation contract with the specified
 // parameters to determine the correctt fee value.
 function computeFee(uint256 excess) returns (uint256) {
