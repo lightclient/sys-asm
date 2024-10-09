@@ -343,7 +343,7 @@ reset_queue:
   sstore                ;; [count]
 
 update_excess:
-  ;; Update the new excess withdrawal requests.
+  ;; Update the new excess consolidation requests.
   push SLOT_EXCESS      ;; [excess_slot, count]
   sload                 ;; [excess, count]
   
