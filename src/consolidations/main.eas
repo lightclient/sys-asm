@@ -1,4 +1,4 @@
-;; This is an implementation of EIP-7002 style contract handling EL triggerred
+;; This is an implementation of EIP-7251 style contract handling EL triggerred
 ;; consolidations. It leverages on the fee mechanism and the queue design of
 ;; the original EIP-7002 smart contract implementation. Therefore, the subroutines
 ;; logic of the original smart contract remains.
