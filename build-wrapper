@@ -18,10 +18,6 @@ sed \
     "$SCRIPT_DIR/test/Withdrawal.t.sol.in" > "$SCRIPT_DIR/test/Withdrawal.t.sol"
 
 sed \
-    -e "s/@bytecode@/$WITHDRAWALS_BYTECODE/" \
-    "$SCRIPT_DIR/test/halmos/EIP7002.t.sol.in" > "$SCRIPT_DIR/test/halmos/EIP7002.t.sol"
-
-sed \
     -e "s/@bytecode@/$FAKE_EXPO_BYTECODE/" \
     "$SCRIPT_DIR/test/FakeExpo.t.sol.in" > "$SCRIPT_DIR/test/FakeExpo.t.sol"
 
@@ -29,5 +25,13 @@ sed \
     -e "s/@bytecode@/$CONSOLODATIONS_BYTECODE/" \
     -e "s/@bytecode_expo@/$FAKE_EXPO_BYTECODE/" \
     "$SCRIPT_DIR/test/Consolidation.t.sol.in" > "$SCRIPT_DIR/test/Consolidation.t.sol"
+
+sed \
+    -e "s/@bytecode@/$WITHDRAWALS_BYTECODE/" \
+    "$SCRIPT_DIR/test/halmos/EIP7002.t.sol.in" > "$SCRIPT_DIR/test/halmos/EIP7002.t.sol"
+
+sed \
+    -e "s/@bytecode@/$CONSOLODATIONS_BYTECODE/" \
+    "$SCRIPT_DIR/test/halmos/EIP7251.t.sol.in" > "$SCRIPT_DIR/test/halmos/EIP7251.t.sol"
 
 forge "$@" --evm-version shanghai

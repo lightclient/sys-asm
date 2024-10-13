@@ -4,28 +4,28 @@ pragma solidity >=0.8.0 <0.9.0;
 import "forge-std/Test.sol";
 import {SymTest} from "halmos-cheatcodes/SymTest.sol";
 
-// Functional correctness test for the system contract bytecode in https://eips.ethereum.org/EIPS/eip-7002
+// Functional correctness test for the system contract bytecode in https://eips.ethereum.org/EIPS/eip-7251
 
 /// @custom:halmos --storage-layout generic
-contract EIP7002Test is SymTest, Test {
-    address constant WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS = address(0x00A3ca265EBcb825B45F985A16CEFB49958cE017);
+contract EIP7251Test is SymTest, Test {
+    address constant CONSOLIDATION_REQUEST_PREDEPLOY_ADDRESS = address(0x0000000000000000000000000000000000000000);
     address constant SYSTEM_ADDRESS = address(0xffffFFFfFFffffffffffffffFfFFFfffFFFfFFfE);
 
-    uint constant EXCESS_WITHDRAWAL_REQUESTS_STORAGE_SLOT = 0;
-    uint constant WITHDRAWAL_REQUEST_COUNT_STORAGE_SLOT = 1;
-    uint constant WITHDRAWAL_REQUEST_QUEUE_HEAD_STORAGE_SLOT = 2;
-    uint constant WITHDRAWAL_REQUEST_QUEUE_TAIL_STORAGE_SLOT = 3;
-    uint constant WITHDRAWAL_REQUEST_QUEUE_STORAGE_OFFSET = 4;
-    uint constant MAX_WITHDRAWAL_REQUESTS_PER_BLOCK = 16;
-    uint constant TARGET_WITHDRAWAL_REQUESTS_PER_BLOCK = 2;
-    uint constant MIN_WITHDRAWAL_REQUEST_FEE = 1;
-    uint constant WITHDRAWAL_REQUEST_FEE_UPDATE_FRACTION = 17;
+    uint constant EXCESS_CONSOLIDATION_REQUESTS_STORAGE_SLOT = 0;
+    uint constant CONSOLIDATION_REQUEST_COUNT_STORAGE_SLOT = 1;
+    uint constant CONSOLIDATION_REQUEST_QUEUE_HEAD_STORAGE_SLOT = 2;
+    uint constant CONSOLIDATION_REQUEST_QUEUE_TAIL_STORAGE_SLOT = 3;
+    uint constant CONSOLIDATION_REQUEST_QUEUE_STORAGE_OFFSET = 4;
+    uint constant MAX_CONSOLIDATION_REQUESTS_PER_BLOCK = 1;
+    uint constant TARGET_CONSOLIDATION_REQUESTS_PER_BLOCK = 1;
+    uint constant MIN_CONSOLIDATION_REQUEST_FEE = 1;
+    uint constant CONSOLIDATION_REQUEST_FEE_UPDATE_FRACTION = 17;
 
     uint constant EXCESS_INHIBITOR = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
 
-    uint constant SLOTS_PER_ITEM = 3;   // padding (12 bytes) + address (20 bytes) + pubkey (48 bytes) + amount (8 bytes) + padding (8 bytes)
-    uint constant INPUT_SIZE = 56;      //                                           pubkey (48 bytes) + amount (8 bytes)
-    uint constant RECORD_SIZE = 76;     //                      address (20 bytes) + pubkey (48 bytes) + amount (8 bytes)
+    uint constant SLOTS_PER_ITEM = 4;   // padding (12 bytes) + source address (20 bytes) + source pubkey (48 bytes) + target pubkey (48 bytes)
+    uint constant INPUT_SIZE = 96;      //                                                  source pubkey (48 bytes) + target pubkey (48 bytes)
+    uint constant RECORD_SIZE = 116;    //                      source address (20 bytes) + source pubkey (48 bytes) + target pubkey (48 bytes)
 
     struct State {
         uint balance;
@@ -49,50 +49,46 @@ contract EIP7002Test is SymTest, Test {
     }
 
     function _getState() internal view returns (State memory) {
-        uint balance = WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS.balance;
+        uint balance = CONSOLIDATION_REQUEST_PREDEPLOY_ADDRESS.balance;
 
-        uint excess = uint(vm.load(WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS, bytes32(EXCESS_WITHDRAWAL_REQUESTS_STORAGE_SLOT)));
-        uint count = uint(vm.load(WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS, bytes32(WITHDRAWAL_REQUEST_COUNT_STORAGE_SLOT)));
+        uint excess = uint(vm.load(CONSOLIDATION_REQUEST_PREDEPLOY_ADDRESS, bytes32(EXCESS_CONSOLIDATION_REQUESTS_STORAGE_SLOT)));
+        uint count = uint(vm.load(CONSOLIDATION_REQUEST_PREDEPLOY_ADDRESS, bytes32(CONSOLIDATION_REQUEST_COUNT_STORAGE_SLOT)));
 
-        uint queueHeadIndex = uint(vm.load(WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS, bytes32(WITHDRAWAL_REQUEST_QUEUE_HEAD_STORAGE_SLOT)));
-        uint queueTailIndex = uint(vm.load(WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS, bytes32(WITHDRAWAL_REQUEST_QUEUE_TAIL_STORAGE_SLOT)));
+        uint queueHeadIndex = uint(vm.load(CONSOLIDATION_REQUEST_PREDEPLOY_ADDRESS, bytes32(CONSOLIDATION_REQUEST_QUEUE_HEAD_STORAGE_SLOT)));
+        uint queueTailIndex = uint(vm.load(CONSOLIDATION_REQUEST_PREDEPLOY_ADDRESS, bytes32(CONSOLIDATION_REQUEST_QUEUE_TAIL_STORAGE_SLOT)));
 
-        uint anySlotValue = uint(vm.load(WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS, bytes32(anySlot)));
+        uint anySlotValue = uint(vm.load(CONSOLIDATION_REQUEST_PREDEPLOY_ADDRESS, bytes32(anySlot)));
 
         return State(balance, excess, count, queueHeadIndex, queueTailIndex, anySlotValue);
     }
 
     function _getQueueItem(uint slot) internal view returns (bytes memory) {
-        bytes32 item0 = vm.load(WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS, bytes32(slot));
-        bytes32 item1 = vm.load(WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS, bytes32(slot + 1));
-        bytes32 item2 = vm.load(WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS, bytes32(slot + 2));
-        return bytes.concat(item0, item1, item2);
+        bytes32 item0 = vm.load(CONSOLIDATION_REQUEST_PREDEPLOY_ADDRESS, bytes32(slot));
+        bytes32 item1 = vm.load(CONSOLIDATION_REQUEST_PREDEPLOY_ADDRESS, bytes32(slot + 1));
+        bytes32 item2 = vm.load(CONSOLIDATION_REQUEST_PREDEPLOY_ADDRESS, bytes32(slot + 2));
+        bytes32 item3 = vm.load(CONSOLIDATION_REQUEST_PREDEPLOY_ADDRESS, bytes32(slot + 3));
+        return bytes.concat(item0, item1, item2, item3);
     }
 
     function _getSource(bytes memory item) internal view returns (address) {
         return address(uint160(bytes20(this.slice(item, 12, 32))));
     }
 
-    function _getPubkey(bytes memory item) internal view returns (bytes memory) {
+    function _getSourcePubkey(bytes memory item) internal view returns (bytes memory) {
         return this.slice(item, 32, 80);
     }
 
-    function _getAmountLE(bytes memory item) internal view returns (bytes8) {
-        return bytes8(this.slice(item, 80, 88));
-    }
-
-    function _getAmountBE(bytes memory item) internal view returns (bytes8) {
-        bytes8 amountLE = _getAmountLE(item);
-        return bytes8(bytes.concat(amountLE[7], amountLE[6], amountLE[5], amountLE[4], amountLE[3], amountLE[2], amountLE[1], amountLE[0]));
+    function _getTargetPubkey(bytes memory item) internal view returns (bytes memory) {
+        return this.slice(item, 80, 128);
     }
 
     function setUp() public {
         // set the bytecode generated by `geas src/withdrawals/main.eas`
-        vm.etch(WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS, hex"@bytecode@");
+        vm.etch(CONSOLIDATION_REQUEST_PREDEPLOY_ADDRESS, hex"@bytecode@");
 
         // set symbolic storage and balance
-        svm.enableSymbolicStorage(WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS);
-        vm.deal(WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS, svm.createUint(96, "WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS.balance"));
+        svm.enableSymbolicStorage(CONSOLIDATION_REQUEST_PREDEPLOY_ADDRESS);
+        vm.deal(CONSOLIDATION_REQUEST_PREDEPLOY_ADDRESS, svm.createUint(96, "CONSOLIDATION_REQUEST_PREDEPLOY_ADDRESS.balance"));
 
         // set symbolic block info
         _setUpBlock();
@@ -113,15 +109,15 @@ contract EIP7002Test is SymTest, Test {
     }
 
     function _callContract(address caller, uint value, bytes memory data) internal returns (bool success, bytes memory retdata, State memory newState) {
-        // call WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS
+        // call CONSOLIDATION_REQUEST_PREDEPLOY_ADDRESS
         vm.prank(caller);
-        (success, retdata) = WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS.call{value: value}(data);
+        (success, retdata) = CONSOLIDATION_REQUEST_PREDEPLOY_ADDRESS.call{value: value}(data);
 
         // record the updated state
         newState = _getState();
     }
 
-    /// @custom:halmos --loop 16 --array-lengths data={0,1,2,32,56,64,1024}
+    /// @custom:halmos --loop 16 --array-lengths data={0,1,2,32,64,96,1024}
     function check_user_operation(address caller, uint value, bytes memory data) public {
         // user operation
         vm.assume(caller != SYSTEM_ADDRESS);
@@ -150,20 +146,19 @@ contract EIP7002Test is SymTest, Test {
 
                 // ensure new queue element
                 assertEq(newState.queueTailIndex, initState.queueTailIndex + 1);
-                uint queueTailSlot = WITHDRAWAL_REQUEST_QUEUE_STORAGE_OFFSET + initState.queueTailIndex * SLOTS_PER_ITEM;
+                uint queueTailSlot = CONSOLIDATION_REQUEST_QUEUE_STORAGE_OFFSET + initState.queueTailIndex * SLOTS_PER_ITEM;
                 bytes memory queueItem = _getQueueItem(queueTailSlot);
-                assertEq(queueItem, bytes.concat(bytes32(uint(uint160(caller))), data, bytes8(0)));
+                assertEq(queueItem, bytes.concat(bytes32(uint(uint160(caller))), data));
                 // ensure no dirty bits for source address, and zero padding at the end
                 assertEq(bytes12(this.slice(queueItem, 0, 12)), bytes12(0));
-                assertEq(bytes8(this.slice(queueItem, 88, 96)), bytes8(0));
 
                 // ensure sufficient fee
                 assertGe(value, _getFee());
 
                 // ensure no storage updates other than count, queue tail index, or the new queue item
                 if (
-                    anySlot != WITHDRAWAL_REQUEST_COUNT_STORAGE_SLOT &&                     // count
-                    anySlot != WITHDRAWAL_REQUEST_QUEUE_TAIL_STORAGE_SLOT &&                // queue tail index
+                    anySlot != CONSOLIDATION_REQUEST_COUNT_STORAGE_SLOT &&                  // count
+                    anySlot != CONSOLIDATION_REQUEST_QUEUE_TAIL_STORAGE_SLOT &&             // queue tail index
                     (anySlot < queueTailSlot || anySlot >= queueTailSlot + SLOTS_PER_ITEM)  // new queue item
                 ) {
                     // NOTE: excess is not updated // TODO: figure out why
@@ -201,10 +196,10 @@ contract EIP7002Test is SymTest, Test {
 
         // ensure excess update
         if (initState.excess != EXCESS_INHIBITOR) {
-            assertEq(newState.excess, subcap(initState.excess + initState.count, TARGET_WITHDRAWAL_REQUESTS_PER_BLOCK));
+            assertEq(newState.excess, subcap(initState.excess + initState.count, TARGET_CONSOLIDATION_REQUESTS_PER_BLOCK));
         } else {
             // at the fork block
-            assertEq(newState.excess, subcap(                   initState.count, TARGET_WITHDRAWAL_REQUESTS_PER_BLOCK));
+            assertEq(newState.excess, subcap(                   initState.count, TARGET_CONSOLIDATION_REQUESTS_PER_BLOCK));
         }
 
         // ensure count reset
@@ -215,7 +210,7 @@ contract EIP7002Test is SymTest, Test {
         uint numDequeued = sub(oldQueueSize, newQueueSize);
 
         // ensure queue pointer updates
-        if (oldQueueSize <= MAX_WITHDRAWAL_REQUESTS_PER_BLOCK) {
+        if (oldQueueSize <= MAX_CONSOLIDATION_REQUESTS_PER_BLOCK) {
             assertEq(newState.queueHeadIndex, 0);
             assertEq(newState.queueTailIndex, 0);
         } else {
@@ -223,7 +218,7 @@ contract EIP7002Test is SymTest, Test {
         }
 
         // ensure max withdrawals per block
-        assertLe(numDequeued, MAX_WITHDRAWAL_REQUESTS_PER_BLOCK);
+        assertLe(numDequeued, MAX_CONSOLIDATION_REQUESTS_PER_BLOCK);
 
         // ensure retdata size
         assertEq(retdata.length, RECORD_SIZE * numDequeued);
@@ -232,18 +227,18 @@ contract EIP7002Test is SymTest, Test {
         for (uint i = 0; i < numDequeued; i++) {
             // TODO: to avoid slowdown as iteration progresses. use push/pop feature once available.
             if (svm.createBool("check-retdata")) {
-                uint queueCurrSlot = WITHDRAWAL_REQUEST_QUEUE_STORAGE_OFFSET + (initState.queueHeadIndex + i) * SLOTS_PER_ITEM;
+                uint queueCurrSlot = CONSOLIDATION_REQUEST_QUEUE_STORAGE_OFFSET + (initState.queueHeadIndex + i) * SLOTS_PER_ITEM;
                 bytes memory queueCurrItem = _getQueueItem(queueCurrSlot);
 
                 uint retOffset = RECORD_SIZE * i;
                 // check source address
                 assertEq(_getSource(queueCurrItem), address(uint160(bytes20(this.slice(retdata, retOffset + 0, retOffset + 20)))));
 
-                // check validator pubkey
-                assertEq(_getPubkey(queueCurrItem), this.slice(retdata, retOffset + 20, retOffset + 68));
+                // check source pubkey
+                assertEq(_getSourcePubkey(queueCurrItem), this.slice(retdata, retOffset + 20, retOffset + 68));
 
-                // ensure big-endian amount
-                assertEq(_getAmountBE(queueCurrItem), bytes8(this.slice(retdata, retOffset + 68, retOffset + RECORD_SIZE)));
+                // check target pubkey
+                assertEq(_getTargetPubkey(queueCurrItem), this.slice(retdata, retOffset + 68, retOffset + RECORD_SIZE));
 
                 // NOTE: the else branch will continue with further iterations
                 return;
@@ -252,17 +247,17 @@ contract EIP7002Test is SymTest, Test {
 
         // ensure no storage update other than excess, count, and queue head/tail indexes
         // NOTE: "removed" queue elements are not reset to zero in storage, so they remain unchanged
-        if (anySlot >= WITHDRAWAL_REQUEST_QUEUE_STORAGE_OFFSET) {
+        if (anySlot >= CONSOLIDATION_REQUEST_QUEUE_STORAGE_OFFSET) {
             assertEq(newState.anySlotValue, initState.anySlotValue);
         }
     }
 
     function _check_balance_update(State memory newState, uint value, address caller, uint callerBalance) internal view {
-        if (caller != WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS) {
+        if (caller != CONSOLIDATION_REQUEST_PREDEPLOY_ADDRESS) {
             assertEq(newState.balance, initState.balance + value);
             assertEq(caller.balance, callerBalance - value);
         } else {
-            // caller == WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS
+            // caller == CONSOLIDATION_REQUEST_PREDEPLOY_ADDRESS
             // self transfer, no balance change
             assertEq(caller.balance, callerBalance);
             // new balance set earlier by vm.deal(caller, callerBalance)
@@ -272,13 +267,13 @@ contract EIP7002Test is SymTest, Test {
 
     function _getFee() internal view returns (uint) {
         return _fake_exponential(
-            MIN_WITHDRAWAL_REQUEST_FEE,
+            MIN_CONSOLIDATION_REQUEST_FEE,
             initState.excess,
-            WITHDRAWAL_REQUEST_FEE_UPDATE_FRACTION
+            CONSOLIDATION_REQUEST_FEE_UPDATE_FRACTION
         );
     }
 
-    // pseudocode from https://eips.ethereum.org/EIPS/eip-7002
+    // pseudocode from https://eips.ethereum.org/EIPS/eip-7251
     // NOTE: the purpose of this is to ensure that the geas implementation matches the pseudocode math, rather than verifying the math itself
     function _fake_exponential(uint factor, uint numerator, uint denominator) internal pure returns (uint) {
         unchecked {
