@@ -1,3 +1,4 @@
 cache/
 out/
 test/*.t.sol
+test/halmos/*.t.sol

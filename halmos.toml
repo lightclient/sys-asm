@@ -1,0 +1,15 @@
+#     ___       ___       ___       ___       ___       ___
+#    /\__\     /\  \     /\__\     /\__\     /\  \     /\  \
+#   /:/__/_   /::\  \   /:/  /    /::L_L_   /::\  \   /::\  \
+#  /::\/\__\ /::\:\__\ /:/__/    /:/L:\__\ /:/\:\__\ /\:\:\__\
+#  \/\::/  / \/\::/  / \:\  \    \/_/:/  / \:\/:/  / \:\:\/__/
+#    /:/  /    /:/  /   \:\__\     /:/  /   \::/  /   \::/  /
+#    \/__/     \/__/     \/__/     \/__/     \/__/     \/__/
+
+[global]
+
+# use the given command when invoking the solver
+solver-command = "yices-smt2"
+
+# cache unsat queries using unsat cores
+cache-solver = false
