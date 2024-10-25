@@ -256,21 +256,21 @@ accum_loop:
   dup1                  ;; [addr_offset, addr_offset, record_offset, i, ..]
   sload                 ;; [addr, addr_offset, record_offset, i, ..]
 
-  ;; Compute pk[0:32] offset and read it.
+  ;; Compute pk1 offset and read it.
   swap1                 ;; [addr_offset, addr, record_offset, i, ..]
   push 1                ;; [1, addr_offset, addr, record_offset, i, ..]
   add                   ;; [pk1_offset, addr, record_offset, i, ..]
   dup1                  ;; [pk1_offset, pk1_offset, addr, record_offset, i, ..]
-  sload                 ;; [pk[0:32], pk1_offset, addr, record_offset, i, ..]
+  sload                 ;; [pk1, pk1_offset, addr, record_offset, i, ..]
 
   ;; Compute pk2_am offset and read it.
-  swap1                 ;; [pk1_offset, pk[0:32], addr, record_offset, i, ..]
-  push 1                ;; [1, pk1_offset, pk[0:32], addr, record_offset, i, ..]
-  add                   ;; [pk2_am_offset, pk[0:32], addr, record_offset, i, ..]
-  sload                 ;; [pk2_am, pk[0:32], addr, record_offset, i, ..]
+  swap1                 ;; [pk1_offset, pk1, addr, record_offset, i, ..]
+  push 1                ;; [1, pk1_offset, pk1, addr, record_offset, i, ..]
+  add                   ;; [pk2_am_offset, pk1, addr, record_offset, i, ..]
+  sload                 ;; [pk2_am, pk1, addr, record_offset, i, ..]
 
   ;; Write values to memory flat and contiguously. This require combining the
-  ;; three storage elements (addr, pk[0:32], pk2_am) so there is no padding.
+  ;; three storage elements (addr, pk1, pk2_am) so there is no padding.
   ;;
   ;; Each stack element has the following layout:
   ;;
@@ -278,7 +278,7 @@ accum_loop:
   ;;  0x00 | 00 00 00 00 00 00 00 00 00 00 00 00 aa aa aa aa
   ;;  0x10 | aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa
   ;;
-  ;; B: pk[0:32]
+  ;; B: pk[0:32] -> pk1
   ;;  0x00 | bb bb bb bb bb bb bb bb bb bb bb bb bb bb bb bb
   ;;  0x10 | bb bb bb bb bb bb bb bb bb bb bb bb bb bb bb bb
   ;;
@@ -292,18 +292,18 @@ accum_loop:
   ;;  (A[12:32] ++ B[0:12], B[12:32] ++ C[0:12], C[12:24])
 
   ;; Shift addr bytes.
-  swap2                 ;; [addr, pk[0:32], pk2_am, record_offset, i, ..]
-  push 12*8             ;; [96, addr, pk[0:32], pk2_am, record_offset, i, ..]
-  shl                   ;; [addr<<96, pk[0:32], pk2_am, record_offset, i, ..]
+  swap2                 ;; [addr, pk1, pk2_am, record_offset, i, ..]
+  push 12*8             ;; [96, addr, pk1, pk2_am, record_offset, i, ..]
+  shl                   ;; [addr<<96, pk1, pk2_am, record_offset, i, ..]
 
   ;; Store addr at offset = i*RECORD_SIZE.
-  dup4                  ;; [record_offset, addr<<96, pk[0:32], pk2_am, record_offset, i, ..]
-  mstore                ;; [pk[0:32], pk2_am, record_offset, i, ..]
+  dup4                  ;; [record_offset, addr<<96, pk1, pk2_am, record_offset, i, ..]
+  mstore                ;; [pk1, pk2_am, record_offset, i, ..]
 
-  ;; Store pk[0:32] at offset = i*RECORD_SIZE + 20.
-  dup3                  ;; [record_offset, pk[0:32], pk2_am, record_offset, i, ..]
-  push 20               ;; [20, record_offset, pk[0:32], pk2_am, record_offset, i, ..]
-  add                   ;; [record_offset+20, pk[0:32], pk2_am, record_offset, i, ..]
+  ;; Store pk1 at offset = i*RECORD_SIZE + 20.
+  dup3                  ;; [record_offset, pk1, pk2_am, record_offset, i, ..]
+  push 20               ;; [20, record_offset, pk1, pk2_am, record_offset, i, ..]
+  add                   ;; [record_offset+20, pk1, pk2_am, record_offset, i, ..]
   mstore                ;; [pk2_am, record_offset, i, ..]
 
   ;; Extract pk2 from pk2_am.
