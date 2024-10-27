@@ -2,27 +2,10 @@
 ;; ┏┛┗┫ ┫┗┓┏┓┏┏┳┓
 ;; ┗━┗┛┗┛┗┛┗┻┛┛┗┗
 ;;                                             
-;; This is an implementation of EIP-2935's predeploy contract. It is a slightly
-;; modified version of the EIP-4788 predeploy. 
-
-;; The contract implements two ring buffers to create bounded execution block
-;; hash lookup. The first ring buffer is a blocknum % buflen -> timestamp 
-;; mapping. This is used to ensure blocknum argument actually matches the
-;; stored hash and isn't a different dividend. The second ring buffer store the
-;; block hash. It's also keyed by blocknum % buflen and the shifted right by
-;; buflen so the two don't overlap.
+;; This is an implementation of EIP-2935's predeploy contract.
 ;;
-;; The ring buffers can be visualized as follows:
-;;
-;;  buflen = 10
-;; |--------------|--------------|
-;; 0             10              20
-;;   block nums      block hash
-;;
-;; To get the corresponding block hash for a specific number, simply add
-;; buflen to the number's index in the first ring buffer. The sum will be
-;; the storage slot in the second ring buffer where it is stored.
-
+;; The contract implements a ring buffer to create bounded execution block
+;; hash lookup. 
 
 ;; ----------------------------------------------------------------------------
 ;; MACROS ---------------------------------------------------------------------
@@ -56,52 +39,46 @@
   ;; Fallthrough if addresses don't match -- this means the caller intends
   ;; to read a root.
 
+  ;; Verify input is 32 bytes long.
+  push1 32          ;; [32]
+  calldatasize      ;; [calldatasize, 32]
+  eq                ;; [calldatasize == 32]
 
-  ;; Check if input > 8 byte value and revert if this isn't the case the
-  ;; check is performed by comparing the biggest 8 byte number with the
-  ;; call data, which is a right-padded 32 byte number.
-  push 0xffffffffffffffff ;; [2^32-1]
-  push 0            ;; [0, 2^32-1]
-  calldataload      ;; [input, 2^32-1]
-  gt                ;; [input > 2^32-1]
-  jumpi @throw      ;; []
+  ;; Jump to continue if length-check passed, otherwise revert.
+  jumpi @load      ;; []
+  %do_revert()     ;; []
 
-  ;; Check if input > number-1 then return 0.
-  push 1            ;; [1]
-  number            ;; [number, 1]
-  sub               ;; [number-1]              
-  push0             ;; [0, number-1]
-  calldataload      ;; [input, number-1]
-  gt                ;; [input > number-1]
-  jumpi @zeroreturn
-
-  ;; Check if blocknumber > input + 8192 then return 0, no overflow
-  ;; expected for input of < max 8 byte value
+load:
+  ;; Check if input is requesting a block hash greater than current block
+  ;; number.
   push 0            ;; [0]
   calldataload      ;; [input]
-  push 8192         ;; [8192, input]
-  add               ;; [input+8192]
-  number            ;; [number, input+8192]
-  gt                ;; [number > input+8192]
-  jumpi @zeroreturn      ;; []
+  push 1            ;; [1, input]
+  number            ;; [number, 1, input]
+  sub               ;; [number-1, input]              
+  dup2              ;; [input, number-1, input]
+  gt                ;; [input > number-1, input]
+  jumpi @throw      ;; [input]
 
-  ;; mod 8191 and sload
-  push 8191         ;; [8191]
-  push 0            ;; [0, 8191]
-  calldataload      ;; [input, 8191]
-  and               ;; [input % 8191]
+  ;; Check if the input is requesting a block hash before the earliest available
+  ;; hash currently. Since we've verfied that input <= number - 1, it's safe to
+  ;; check the following:
+  ;; number - 1 - input <= BUFLEN, which also equals: number - input < BUFLEN
+  dup1              ;; [input, input]
+  number            ;; [number, input, input]
+  sub               ;; [number - input, input]
+  push BUFLEN+1     ;; [buflen, number - input, input]
+  lt                ;; [buflen < number - input, input]
+  jumpi @throw      ;; [input]
+
+  ;; Load the hash.
+  push BUFLEN       ;; [buflen, input]
+  swap1             ;; [input, buflen]
+  mod               ;; [input % buflen]
   sload             ;; [hash]
 
-  ;; load into mem and return 32 bytes
+  ;; Load into memory and return.
   push 0            ;; [0, hash]
-  mstore            ;; []
-  push 32           ;; [32]
-  push 0            ;; [0, 32]
-  return            ;; []
-
-zeroreturn:
-  push 0            ;; [0]
-  push 0            ;; [0, 0]
   mstore            ;; []
   push 32           ;; [32]
   push 0            ;; [0, 32]
@@ -109,16 +86,17 @@ zeroreturn:
 
 throw:
   ;; Reverts current execution with no return data.
+  pop
   %do_revert()
 
 submit:
   push 0            ;; [0]
   calldataload      ;; [in]
-  push 8191         ;; [8191, in]
-  push 1            ;; [1, 8191, in]
-  number            ;; [number, 1, 8191, in]
-  sub               ;; [number-1, 8191, in]
-  and               ;; [number-1 % 8191, in]
+  push BUFLEN       ;; [buflen, in]
+  push 1            ;; [1, buflen, in]
+  number            ;; [number, 1, buflen, in]
+  sub               ;; [number-1, buflen, in]
+  mod               ;; [number-1 % buflen, in]
   sstore
 
   stop
