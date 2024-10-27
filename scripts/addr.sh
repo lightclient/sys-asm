@@ -42,6 +42,10 @@ case $1 in
     echo "searching for consolidations deployment data "
     nick search --score=$score --initcode="0x$(geas src/consolidations/ctor.eas)" --prefix=0x0000 --suffix=0xbbbb
     ;;
+  exechash|e|2935)
+    echo "searching for execution hash deployment data "
+    nick search --score=$score --initcode="0x$(geas src/execution_hash/ctor.eas)" --prefix=0x0000 --suffix=0xcccc
+    ;;
   *)
     echo "Invalid option. Usage: $0 {withdrawals|consolidations}"
     ;;
