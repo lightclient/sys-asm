@@ -146,4 +146,3 @@ contract ContractTest is Test {
         }
     }
 }
-
