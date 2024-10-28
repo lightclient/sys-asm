@@ -62,7 +62,7 @@
   ;; If calldatasize == 0, return the current excess withdrawal requests.
   calldatasize          ;; [calldatasize]
   iszero                ;; [calldatasize == 0]
-  jumpi @read_excess_op
+  jumpi @read_excess
 
   ;; Input data has the following layout:
   ;;
@@ -102,7 +102,7 @@
   sload                 ;; [req_count]
   push1 1               ;; [1, req_count]
   add                   ;; [req_count+1]
-  push SLOT_COUNT
+  push SLOT_COUNT       ;; [slot, req_count+1]
   sstore                ;; []
 
   ;; Now insert request into queue. First, compute the base storage slot
@@ -111,7 +111,7 @@
   dup1                  ;; [tail_idx, tail_idx]
   push1 3               ;; [3, tail_idx, tail_idx]
   mul                   ;; [3*tail_idx, tail_idx]
-  push QUEUE_OFFSET
+  push QUEUE_OFFSET     ;; [ost, 3*tail_idx, tail_idx]
   add                   ;; [slot, tail_idx]
 
   ;; Write address to queue.
@@ -161,7 +161,7 @@
 
   stop
 
-read_excess_op:
+read_excess:
   ;; This is the read path, where we return the current excess.
   ;; Reject any callvalue here to prevent lost funds.
   callvalue             ;; [value]
