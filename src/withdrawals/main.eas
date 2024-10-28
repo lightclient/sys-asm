@@ -59,7 +59,7 @@
   ;; This is the default code path. It will attempt to record a user's request
   ;; so long as they pay the required fee.
 
-  ;; If calldatasize == 0, return the current excess withdrawal requests.
+  ;; If calldatasize == 0, return the current excess requests.
   calldatasize          ;; [calldatasize]
   iszero                ;; [calldatasize == 0]
   jumpi @read_excess
