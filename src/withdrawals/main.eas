@@ -236,33 +236,13 @@ accum_loop:
   add                   ;; [i+head_idx, i, ..]
   push 3                ;; [3, i+head_idx, i, ..]
   mul                   ;; [3*(i+head_idx), i, ..]
-  push QUEUE_OFFSET     ;; [offset, 3*(i+head_idx), i, ..]
-  add                   ;; [addr_offset, i, ..]
-
-  ;; Read address.
-  dup1                  ;; [addr_offset, addr_offset, i, ..]
-  sload                 ;; [addr, addr_offset, i, ..]
-
-  ;; Compute pk1 offset and read it.
-  swap1                 ;; [addr_offset, addr, i, ..]
-  push 1                ;; [1, addr_offset, addr, i, ..]
-  add                   ;; [pk1_offset, addr, i, ..]
-  dup1                  ;; [pk1_offset, pk1_offset, addr, i, ..]
-  sload                 ;; [pk1, pk1_offset, addr, i, ..]
-
-  ;; Compute pk2_am offset and read it.
-  swap1                 ;; [pk1_offset, pk1, addr, i, ..]
-  push 1                ;; [1, pk1_offset, pk1, addr, i, ..]
-  add                   ;; [pk2_am_offset, pk1, addr, i, ..]
-  sload                 ;; [pk2_am, pk1, addr, i, ..]
-
-  ;; Reorder values.
-  swap2                 ;; [addr, pk1, pk2_am, i, ..]
+  push QUEUE_OFFSET     ;; [queue_offset, 3*(i+head_idx), i, ..]
+  add                   ;; [slotbase, i, ..]
 
   ;; Write values to memory flat and contiguously. This require combining the
   ;; three storage elements (addr, pk1, pk2_am) so there is no padding.
   ;;
-  ;; Each stack element has the following layout:
+  ;; The slots have the following layout:
   ;;
   ;; A: addr
   ;;  0x00 | 00 00 00 00 00 00 00 00 00 00 00 00 aa aa aa aa
@@ -275,56 +255,68 @@ accum_loop:
   ;; C: pk[32:48] ++ am[0:8] -> pk2_am
   ;;  0x00 | cc cc cc cc cc cc cc cc cc cc cc cc cc cc cc cc
   ;;  0x10 | dd dd dd dd dd dd dd dd 00 00 00 00 00 00 00 00
-  ;;
-  ;; To get these three stack elements into the correct contiguous format, it is
-  ;; neccessary to combine them in the follow form:
-  ;;
-  ;;  (A[12:32] ++ B[0:12], B[12:32] ++ C[0:12], C[12:24])
 
-  ;; Compute offset = i*RECORD_SIZE.
-  dup4                  ;; [i, addr, pk1, pk2_am, i, ..]
-  push RECORD_SIZE      ;; [size, i, addr, pk1, pk2_am, i, ..]
-  mul                   ;; [offset, addr, pk1, pk2_am, i, ..]
+  ;; Compute the output offset = i*RECORD_SIZE.
+  dup2                  ;; [i, slotbase, i, ..]
+  push RECORD_SIZE      ;; [size, i, slotbase, i, ..]
+  mul                   ;; [offset=size*i, slotbase, i, ..]
+
+  ;; Read slot 'addr' from storage.
+  dup2                  ;; [slotbase, offset, slotbase, ..]
+  sload                 ;; [addr, offset, slotbase, ..]
 
   ;; Shift addr bytes.
-  swap1                 ;; [addr, offset, pk1, pk2_am, i, ..]
-  push 12*8             ;; [96, addr, offset, pk1, pk2_am, i, ..]
-  shl                   ;; [addr<<96, offset, pk1, pk2_am, i, ..]
+  push 12*8             ;; [96, addr, offset, slotbase, ..]
+  shl                   ;; [addr<<96, offset, slotbase, ..]
 
-  ;; Store addr at current offset.
-  dup2                  ;; [offset, addr<<96, offset, pk1, pk2_am, i, ..]
-  mstore                ;; [offset, pk1, pk2_am, i, ..]
-  push 20               ;; [20, offset, pk1, pk2_am, i, ..]
-  add                   ;; [offset, pk1, pk2_am, i, ..]
+  ;; Store addr at output offset = i*RECORD_SIZE.
+  dup2                  ;; [offset, addr<<96, offset, slotbase, ..]
+  mstore                ;; [offset, slotbase, ..]
+  push 20               ;; [20, offset, slotbase, ..]
+  add                   ;; [offset=offset+20, slotbase, ..]
 
-  ;; Store pk1 at offset = i*RECORD_SIZE + 20.
-  swap1                 ;; [pk1, offset, pk2_am, i, ..]
-  dup2                  ;; [offset, pk1, offset, pk2_am, i, ..]
-  mstore                ;; [offset, pk2_am, i, ..]
-  push 32               ;; [32, offset, pk2_am, i, ..]
-  add                   ;; [offset, pk2_am, i, ..]
+  ;; Read slot 'pk1' from storage.
+  dup2                  ;; [slotbase, offset, slotbase, ..]
+  push 1                ;; [1, slotbase, offset, slotbase, ..]
+  add                   ;; [slot, offset, slotbase, ..]
+  sload                 ;; [pk1, offset, slotbase, ..]
+
+  ;; Store pk1 at output offset = i*RECORD_SIZE + 20.
+  dup2                  ;; [offset, pk1, offset, slotbase, ..]
+  mstore                ;; [offset, slotbase, ..]
+  push 32               ;; [32, offset, slotbase, ..]
+  add                   ;; [offset=offset+32, slotbase, ..]
+
+  ;; Read slot 'pk2_am' from storage.
+  dup2                  ;; [slotbase, offset, slotbase, ..]
+  push 2                ;; [2, slotbase, offset, slotbase, ..]
+  add                   ;; [slot, offset, slotbase, ..]
+  sload                 ;; [pk2_am, offset, slotbase, ..]
 
   ;; Extract pk2 from pk2_am.
-  dup2                  ;; [pk2_am, offset, pk2_am, i, ..]
-  push pk2_mask         ;; [mask, pk2_am, offset, pk2_am, i, ..]
-  and                   ;; [pk2, offset, pk2_am, i, ..]
+  dup1                  ;; [pk2_am, pk2_am, offset, slotbase, ..]
+  push pk2_mask         ;; [mask, pk2_am, offset, slotbase, ..]
+  and                   ;; [pk2, pk2_am, offset, slotbase, ..]
 
   ;; Store pk2 at offset = i*RECORD_SIZE + 52.
-  dup2                  ;; [offset, pk2, offset, pk2_am, i, ..]
-  mstore                ;; [offset, pk2_am, i, ..]
-  push 16               ;; [16, offset, pk2_am, i, ..]
-  add                   ;; [offset, pk2_am, i, ..]
+  dup3                  ;; [offset, pk2, pk2_am, offset, slotbase, ..]
+  mstore                ;; [pk2_am, offset, slotbase, ..]
+  swap1                 ;; [offset, pk2_am, slotbase, ..]
+  push 16               ;; [16, offset, pk2_am, slotbase, ..]
+  add                   ;; [offset=offset+16, pk2_am, slotbase, ..]
 
   ;; Extract am from pk2_am.
-  swap1                 ;; [pk2_am, offset, i, ..]
-  push 8*8              ;; [shft, pk2_am, offset, i, ..]
-  shr                   ;; [am, offset, i, ..]
+  swap1                 ;; [pk2_am, offset, slotbase, ..]
+  push 8*8              ;; [shft, pk2_am, offset, slotbase, ..]
+  shr                   ;; [am, offset, slotbase, ..]
 
   ;; Store am at offset = i*RECORD_SIZE + 68.
-  swap1                 ;; [offset, am, i, ..]
-  %mstore_uint64_le()   ;; [i, ..]
+  ;; Note we convert to little-endian.
+  swap1                 ;; [offset, am, slotbase, ..]
+  %mstore_uint64_le()   ;; [slotbase, i, ..]
 
   ;; Increment i.
+  pop                   ;; [i, ..]
   push 1                ;; [1, i, ..]
   add                   ;; [i+1, ..]
 
