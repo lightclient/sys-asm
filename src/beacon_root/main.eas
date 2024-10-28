@@ -35,9 +35,9 @@
 
 ;; do_revert sets up and then executes a revert(0,0) operation.
 #define %do_revert() {
-        push0           ;; [0]
-        push0           ;; [0, 0]
-        revert          ;; []
+  push 0          ;; [0]
+  push 0          ;; [0, 0]
+  revert          ;; []
 }
 
 ;; ----------------------------------------------------------------------------
@@ -45,94 +45,94 @@
 ;; ----------------------------------------------------------------------------
 
 .start:
-        ;; Protect the submit routine by verifying the caller is equal to
-        ;; sysaddr().
-        caller           ;; [caller]
-        push20 SYSADDR   ;; [sysaddr, caller]
-        eq               ;; [sysaddr == caller]
-        push1 @submit    ;; [submit_lbl, sysaddr == caller]
-        jumpi            ;; []
+  ;; Protect the submit routine by verifying the caller is equal to
+  ;; sysaddr().
+  caller           ;; [caller]
+  push SYSADDR     ;; [sysaddr, caller]
+  eq               ;; [sysaddr == caller]
+  push @submit     ;; [submit_lbl, sysaddr == caller]
+  jumpi            ;; []
 
-        ;; Fallthrough if addresses don't match -- this means the caller intends
-        ;; to read a root.
+  ;; Fallthrough if addresses don't match -- this means the caller intends
+  ;; to read a root.
 
-        ;; Check if calldata is equal to 32 bytes.
-        push1 32         ;; [32]
-        calldatasize     ;; [calldatasize, 32]
-        eq               ;; [calldatasize == 32]
+  ;; Check if calldata is equal to 32 bytes.
+  push 32          ;; [32]
+  calldatasize     ;; [calldatasize, 32]
+  eq               ;; [calldatasize == 32]
 
-        ;; Jump to continue if length-check passed, otherwise revert.
-        push1 @loadtime   ;; [loadtime_lbl, calldatasize == 32]
-        jumpi            ;; []
-        %do_revert()     ;; []
+  ;; Jump to continue if length-check passed, otherwise revert.
+  push @loadtime   ;; [loadtime_lbl, calldatasize == 32]
+  jumpi            ;; []
+  %do_revert()     ;; []
 
 loadtime:
-        ;; Load input timestamp.
-        push0            ;; [0]
-        calldataload     ;; [input_timestamp]
-        dup1             ;; [input_timestamp, input_timestamp]
+  ;; Load input timestamp.
+  push 0           ;; [0]
+  calldataload     ;; [input_timestamp]
+  dup1             ;; [input_timestamp, input_timestamp]
 
-        ;; Verify input timestamp is non-zero.
-        iszero           ;; [input_timestamp == 0, input_timestamp]
-        push1 @throw      ;; [throw_lbl, input_timestamp == 0, input_timestamp]
-        jumpi            ;; [input_timestamp]
+  ;; Verify input timestamp is non-zero.
+  iszero           ;; [input_timestamp == 0, input_timestamp]
+  push @throw      ;; [throw_lbl, input_timestamp == 0, input_timestamp]
+  jumpi            ;; [input_timestamp]
 
-        ;; Compute the timestamp index and load from storage.
-        push3 BUFLEN     ;; [buflen, input_timestamp]
-        dup2             ;; [input_timestamp, buflen, input_timestamp]
-        mod              ;; [time_index, input_timestamp]
-        swap1            ;; [input_timestamp, time_index]
-        dup2             ;; [time_index, input_timestamp, time_index]
-        sload            ;; [stored_timestamp, input_timestamp, time_index]
+  ;; Compute the timestamp index and load from storage.
+  push BUFLEN      ;; [buflen, input_timestamp]
+  dup2             ;; [input_timestamp, buflen, input_timestamp]
+  mod              ;; [time_index, input_timestamp]
+  swap1            ;; [input_timestamp, time_index]
+  dup2             ;; [time_index, input_timestamp, time_index]
+  sload            ;; [stored_timestamp, input_timestamp, time_index]
 
-        ;; Verify stored timestamp matches input timestamp. It's possible these
-        ;; don't match if the slot has been overwritten by the ring buffer or if
-        ;; the timestamp input wasn't a valid previous timestamp.
-        eq               ;; [stored_timestamp == input_timestamp, time_index]
-        push1 @loadroot   ;; [loadroot_lbl, input == timestamp, time_index]
-        jumpi            ;; [time_index]
-        %do_revert()     ;; []
+  ;; Verify stored timestamp matches input timestamp. It's possible these
+  ;; don't match if the slot has been overwritten by the ring buffer or if
+  ;; the timestamp input wasn't a valid previous timestamp.
+  eq               ;; [stored_timestamp == input_timestamp, time_index]
+  push @loadroot   ;; [loadroot_lbl, input == timestamp, time_index]
+  jumpi            ;; [time_index]
+  %do_revert()     ;; []
 
 loadroot:
-        ;; Extend index to get root index.
-        push3 BUFLEN     ;; [buflen, time_index]
-        add              ;; [root_index]
-        sload            ;; [root]
+  ;; Extend index to get root index.
+  push BUFLEN      ;; [buflen, time_index]
+  add              ;; [root_index]
+  sload            ;; [root]
 
-        ;; Write the retrieved root to memory so it can be returned.
-        push0            ;; [0, root]
-        mstore           ;; []
+  ;; Write the retrieved root to memory so it can be returned.
+  push 0           ;; [0, root]
+  mstore           ;; []
 
-        ;; Return the root.
-        push1 32         ;; [size]
-        push0            ;; [offset, size]
-        return           ;; []
+  ;; Return the root.
+  push 32          ;; [size]
+  push 0           ;; [offset, size]
+  return           ;; []
 
 throw:
-        ;; Reverts current execution with no return data.
-        %do_revert()
+  ;; Reverts current execution with no return data.
+  %do_revert()
 
 submit:
-        ;; Calculate the index the timestamp should be stored at, e.g.
-        ;; time_index = (time % buflen).
-        push3 BUFLEN     ;; [buflen]
-        timestamp        ;; [time, buflen]
-        mod              ;; [time % buflen]
+  ;; Calculate the index the timestamp should be stored at, e.g.
+  ;; time_index = (time % buflen).
+  push BUFLEN      ;; [buflen]
+  timestamp        ;; [time, buflen]
+  mod              ;; [time % buflen]
 
-        ;; Write timestamp into storage slot at time_index.
-        timestamp        ;; [time, time_index]
-        dup2             ;; [time_index, time, time_index]
-        sstore           ;; [time_index]
+  ;; Write timestamp into storage slot at time_index.
+  timestamp        ;; [time, time_index]
+  dup2             ;; [time_index, time, time_index]
+  sstore           ;; [time_index]
 
-        ;; Get root from calldata and write into root_index. No validation is
-        ;; done on the input root. Becuase the routine is protected by a caller
-        ;; check against sysaddr(), it's okay to assume the value is correctly
-        ;; given.
-        push0            ;; [0, time_index]
-        calldataload     ;; [root, time_index]
-        swap1            ;; [time_index, root]
-        push3 BUFLEN     ;; [buflen, time_index, root]
-        add              ;; [root_index, root]
-        sstore           ;; []
+  ;; Get root from calldata and write into root_index. No validation is
+  ;; done on the input root. Becuase the routine is protected by a caller
+  ;; check against sysaddr(), it's okay to assume the value is correctly
+  ;; given.
+  push 0           ;; [0, time_index]
+  calldataload     ;; [root, time_index]
+  swap1            ;; [time_index, root]
+  push BUFLEN      ;; [buflen, time_index, root]
+  add              ;; [root_index, root]
+  sstore           ;; []
 
-        stop             ;; []
+  stop             ;; []
