@@ -38,22 +38,23 @@
 
 #define INPUT_SIZE 56   ;; the size of (pubkey ++ amount)
 #define RECORD_SIZE 76  ;; the size of (address ++ pubkey ++ amount)
+#define SLOTS_PER_ITEM 3 ;; (address, pubkey[0:32], pubkey[32:48] ++ amount)
 
-;; -----------------------------------------------------------------------------
-;; PROGRAM START ---------------------------------------------------------------
-;; -----------------------------------------------------------------------------
+;; ----------------------------------------------------------------------------
+;; PROGRAM START --------------------------------------------------------------
+;; ----------------------------------------------------------------------------
 
 .start:
   ;; Protect the system subroutine by checking if the caller is the system
   ;; address.
   caller                ;; [caller]
-  push20 SYSTEM_ADDR    ;; [sysaddr, caller]
+  push SYSTEM_ADDR      ;; [sysaddr, caller]
   eq                    ;; [sysaddr == caller]
   jumpi @read_requests  ;; []
 
-  ;; ---------------------------------------------------------------------------
-  ;; USER SUBROUTINE -----------------------------------------------------------
-  ;; ---------------------------------------------------------------------------
+  ;; --------------------------------------------------------------------------
+  ;; USER SUBROUTINE ----------------------------------------------------------
+  ;; --------------------------------------------------------------------------
   ;;
   ;; Record new withdrawal request ~~
   ;; This is the default code path. It will attempt to record a user's request
@@ -73,7 +74,7 @@
 
   ;; Verify the input is exactly 56 bytes.
   calldatasize          ;; [calldatasize]
-  push1 INPUT_SIZE      ;; [INPUT_SIZE, calldatasize]
+  push INPUT_SIZE       ;; [INPUT_SIZE, calldatasize]
   eq                    ;; [INPUT_SIZE == calldatasize]
   iszero                ;; [INPUT_SIZE != calldatasize]
   jumpi @revert         ;; []
@@ -100,7 +101,7 @@
   ;; The request can pay, increment withdrawal request count.
   push SLOT_COUNT
   sload                 ;; [req_count]
-  push1 1               ;; [1, req_count]
+  push 1                ;; [1, req_count]
   add                   ;; [req_count+1]
   push SLOT_COUNT       ;; [slot, req_count+1]
   sstore                ;; []
@@ -109,8 +110,8 @@
   push QUEUE_TAIL       ;; [tail_idx_slot]
   sload                 ;; [tail_idx]
   dup1                  ;; [tail_idx, tail_idx]
-  push1 3               ;; [3, tail_idx, tail_idx]
-  mul                   ;; [3*tail_idx, tail_idx]
+  push SLOTS_PER_ITEM   ;; [slots, tail_idx, tail_idx]
+  mul                   ;; [slots*tail_idx, tail_idx]
   push QUEUE_OFFSET     ;; [ost, 3*tail_idx, tail_idx]
   add                   ;; [slot, tail_idx]
 
@@ -119,42 +120,42 @@
   dup2                  ;; [slot, caller, slot, ..]
   sstore                ;; [slot, ..]
 
-  push1 1               ;; [1, slot, ..]
+  push 1                ;; [1, slot, ..]
   add                   ;; [slot, ..]
 
   ;; Store pk[0:32] to queue.
-  push0                 ;; [0, slot, ..]
+  push 0                ;; [0, slot, ..]
   calldataload          ;; [pk[0:32], slot, ..]
   dup2                  ;; [slot, pk[0:32], slot, ..]
   sstore                ;; [slot, ..]
 
-  push1 1               ;; [1, slot, ..]
+  push 1                ;; [1, slot, ..]
   add                   ;; [slot, ..]
 
   ;; Store pk2_am to queue.
-  push1 32              ;; [32, slot, ..]
+  push 32               ;; [32, slot, ..]
   calldataload          ;; [pk2_am, slot, ..]
   swap1                 ;; [slot, pk2_am, ..]
   sstore                ;; [..]
 
   ;; Assemble log data.
   caller                ;; [caller, ..]
-  push1 96              ;; [96, caller, ..]
+  push 96               ;; [96, caller, ..]
   shl                   ;; [caller, ..]
-  push0                 ;; [0, caller, ..]
+  push 0                ;; [0, caller, ..]
   mstore                ;; [..]
-  push1 INPUT_SIZE      ;; [size, ..]
-  push0                 ;; [ost, size, ..]
-  push1 20              ;; [dest, ost, size, ..]
+  push INPUT_SIZE       ;; [size, ..]
+  push 0                ;; [ost, size, ..]
+  push 20               ;; [dest, ost, size, ..]
   calldatacopy          ;; [..]
 
   ;; Log record.
-  push1 RECORD_SIZE     ;; [size, ..]
-  push0                 ;; [idx, size, ..]
+  push RECORD_SIZE      ;; [size, ..]
+  push 0                ;; [idx, size, ..]
   log0                  ;; [..]
 
   ;; Increment queue tail over last and write to storage.
-  push1 1               ;; [1, tail_idx]
+  push 1                ;; [1, tail_idx]
   add                   ;; [tail_idx+1]
   push QUEUE_TAIL       ;; [tail_idx_slot]
   sstore                ;; []
@@ -172,15 +173,15 @@ read_excess:
   ;; Load excess withdrawal requests and return the value.
   push SLOT_EXCESS      ;; [excess_reqs_slot]
   sload                 ;; [excess_reqs]
-  push0                 ;; [0, excess_reqs]
+  push 0                ;; [0, excess_reqs]
   mstore                ;; []
   push 32               ;; [32]
   push 0                ;; [0, 32]
   return                ;; []
 
-;; -----------------------------------------------------------------------------
-;; SYSTEM SUBROUTINE -----------------------------------------------------------
-;; -----------------------------------------------------------------------------
+;; ----------------------------------------------------------------------------
+;; SYSTEM SUBROUTINE ----------------------------------------------------------
+;; ----------------------------------------------------------------------------
 ;;
 ;; Pop withdrawal request from queue, update fee accumulator ~~
 ;; This is the logic executed by the protocol each block. It reads as many
@@ -225,7 +226,7 @@ read_requests:
   push MAX_PER_BLOCK    ;; [count, head_idx, tail_idx]
 
 begin_loop:
-  push0                 ;; [i, count, head_idx, tail_idx]
+  push 0                ;; [i, count, head_idx, tail_idx]
 
 accum_loop:
   ;; This loop will read each request and byte bang it into a 76 byte chunk.
@@ -339,8 +340,8 @@ accum_loop:
   jump @accum_loop      ;; [i, count, head_idx, tail_idx]
 
 update_head:
-  ;; All requests have been read, update queue by adding the count read.
-  ;; to the current head index.
+  ;; All requests have been read, update queue by adding the count read to the
+  ;; current head index.
   swap2                 ;; [head_idx, count, count, tail_idx]
   add                   ;; [new_head_idx, count, tail_idx]
 
@@ -362,11 +363,11 @@ reset_queue:
   swap1                 ;; [new_head_idx, count]
   pop                   ;; [count]
 
-  push0                 ;; [0, count]
+  push 0                ;; [0, count]
   push QUEUE_HEAD       ;; [head_slot, 0, count]
   sstore                ;; [count]
 
-  push0                 ;; [0, count]
+  push 0                ;; [0, count]
   push QUEUE_TAIL       ;; [tail_slot, 0, count]
   sstore                ;; [count]
 
@@ -385,7 +386,7 @@ update_excess:
 
   ;; Drop the excess from storage and use 0.
   pop                   ;; [count, count]
-  push0                 ;; [reset_excess, count]
+  push 0                ;; [reset_excess, count]
 
 skip_reset:
   push SLOT_COUNT       ;; [count_slot, excess, count]
@@ -404,8 +405,8 @@ skip_reset:
   ;; Zero out excess.
   pop                   ;; [excess, count]
   pop                   ;; [count]
-  push0
-  jump @store_excess
+  push 0                ;; [0, count]
+  jump @store_excess    ;; [0, count]
 
 compute_excess:
   add                   ;; [count+excess, count]
@@ -418,25 +419,25 @@ store_excess:
   sstore                ;; [count]
 
   ;; Reset withdrawal request count.
-  push0                 ;; [0, count]
+  push 0                ;; [0, count]
   push SLOT_COUNT       ;; [count_slot, 0, count]
   sstore                ;; [count]
 
   ;; Return the withdrawal requests.
   push RECORD_SIZE      ;; [record_size, count]
   mul                   ;; [size]
-  push0                 ;; [0, size]
+  push 0                ;; [0, size]
   return                ;; []
 
 ;; Revert subroutine.
 revert:
-  push0
-  push0
+  push 0
+  push 0
   revert
 
-;; -----------------------------------------------------------------------------
-;; MACROS ----------------------------------------------------------------------
-;; -----------------------------------------------------------------------------
+;; ----------------------------------------------------------------------------
+;; MACROS ---------------------------------------------------------------------
+;; ----------------------------------------------------------------------------
 
 ;; This defines a mask for accessing the top 16 bytes of a number.
 #define pk2_mask 0xffffffffffffffffffffffffffffffff00000000000000000000000000000000

@@ -3,14 +3,14 @@
 
 dup3        ;; [denom, factor, numer, denom]
 mul         ;; [accum, numer, denom]
-push1 1     ;; [i, accum, numer, denom]
+push 1      ;; [i, accum, numer, denom]
 swap1       ;; [accum, i, numer, denom]
-push0       ;; [output, accum, i, numer, denom]
+push 0      ;; [output, accum, i, numer, denom]
 
 loop:
 
 ;; while accum > 0
-push0       ;; [0, output, accum, i, numer, denom]
+push 0      ;; [0, output, accum, i, numer, denom]
 dup3        ;; [accum, 0, output, accum, i, numer, denom]
 gt          ;; [accum > 0, output, accum, i, numer, denom]
 iszero      ;; [!(accum > 0), output, accum, i, numer, denom]
@@ -32,7 +32,7 @@ swap1       ;; [accum*numer, i*denom, output, i, numer, denom]
 div         ;; [accum, output, i, numer, denom]
 
 swap2       ;; [i, output, accum, numer, denom]
-push1 1     ;; [1, i, output, accum, numer, denom]
+push 1      ;; [1, i, output, accum, numer, denom]
 add         ;; [i, output, accum, numer, denom]
 swap2       ;; [accum, output, i, numer, denom]
 swap1       ;; [output, accum, i, numer, denom]
