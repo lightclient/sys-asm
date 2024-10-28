@@ -52,25 +52,8 @@
   ;; If calldatasize == 0, return the current excess requests.
   calldatasize          ;; [calldatasize]
   iszero                ;; [calldatasize == 0]
-  iszero                ;; [calldatasize != 0]
-  jumpi @check_input
+  jumpi @read_excess
 
-  ;; Reject any callvalue here to prevent lost funds.
-  callvalue             ;; [value]
-  iszero                ;; [value == 0]
-  iszero                ;; [value != 0]
-  jumpi @revert
-
-  ;; Load excess requests and return the value.
-  push SLOT_EXCESS      ;; [excess_reqs_slot]
-  sload                 ;; [excess_reqs]
-  push0                 ;; [0, excess_reqs]
-  mstore                ;; []
-  push 32               ;; [32]
-  push 0                ;; [0, 32]
-  return                ;; []
-
-check_input:
   ;; Input data has the following layout:
   ;;
   ;;  +--------+--------+
@@ -178,6 +161,23 @@ check_input:
 
   stop
 
+read_excess:
+  ;; This is the read path, where we return the current excess.
+  ;; Reject any callvalue here to prevent lost funds.
+  callvalue             ;; [value]
+  iszero                ;; [value == 0]
+  iszero                ;; [value != 0]
+  jumpi @revert
+
+  ;; Load excess requests and return the value.
+  push SLOT_EXCESS      ;; [excess_reqs_slot]
+  sload                 ;; [excess_reqs]
+  push0                 ;; [0, excess_reqs]
+  mstore                ;; []
+  push 32               ;; [32]
+  push 0                ;; [0, 32]
+  return                ;; []
+
 ;; -----------------------------------------------------------------------------
 ;; SYSTEM SUBROUTINE -----------------------------------------------------------
 ;; -----------------------------------------------------------------------------
@@ -236,77 +236,78 @@ accum_loop:
   eq                    ;; [i == count, i, count, head_idx, tail_idx]
   jumpi @update_head    ;; [i, count, head_idx, tail_idx]
 
-  ;; Precompute record_offset = i*RECORD_SIZE.
-  dup1                  ;; [i, i, count, head_idx, tail_idx]
-  push RECORD_SIZE      ;; [size, i, i, count, head_idx, tail_idx]
-  mul                   ;; [record_offset, i, count, head_idx, tail_idx]
-
   ;; Determine the storage slot of the address for this iteration. This value is
   ;; also the base for the other storage slots containing the source and the target
   ;; public keys. The base slot will be (queue_offset + (queue_head + i)*SLOTS_PER_ITEM).
-  dup4                  ;; [head_idx, record_offset, i, ..]
-  dup3                  ;; [i, head_idx, record_offset, i, ..]
-  add                   ;; [i+head_idx, record_offset, i, ..]
-  push SLOTS_PER_ITEM   ;; [SLOTS_PER_ITEM, i+head_idx, record_offset, i, ..]
-  mul                   ;; [SLOTS_PER_ITEM*(i+head_idx), record_offset, i, ..]
-  push QUEUE_OFFSET     ;; [offset, SLOTS_PER_ITEM*(i+head_idx), record_offset, i, ..]
-  add                   ;; [addr_offset, record_offset, i, ..]
+  dup3                  ;; [head_idx, i, ..]
+  dup2                  ;; [i, head_idx, i, ..]
+  add                   ;; [i+head_idx, i, ..]
+  push SLOTS_PER_ITEM   ;; [SLOTS_PER_ITEM, i+head_idx, i, ..]
+  mul                   ;; [SLOTS_PER_ITEM*(i+head_idx), i, ..]
+  push QUEUE_OFFSET     ;; [offset, SLOTS_PER_ITEM*(i+head_idx), i, ..]
+  add                   ;; [addr_offset, i, ..]
 
   ;; Read address from slot 0.
-  dup1                  ;; [addr_offset, addr_offset, record_offset, i, ..]
-  sload                 ;; [addr, addr_offset, record_offset, i, ..]
+  dup1                  ;; [addr_offset, addr_offset, i, ..]
+  sload                 ;; [addr, addr_offset, i, ..]
 
   ;; Read source[0:32] from slot 1.
-  swap1                 ;; [addr_offset, addr, record_offset, i, ..]
-  push 1                ;; [1, addr_offset, addr, record_offset, i, ..]
-  add                   ;; [slot1_offset, addr, record_offset, i, ..]
-  dup1                  ;; [slot1_offset, slot1_offset, addr, record_offset, i, ..]
-  sload                 ;; [source[0:32], slot1_offset, addr, record_offset, i, ..]
+  swap1                 ;; [addr_offset, addr, i, ..]
+  push 1                ;; [1, addr_offset, addr, i, ..]
+  add                   ;; [slot1_offset, addr, i, ..]
+  dup1                  ;; [slot1_offset, slot1_offset, addr, i, ..]
+  sload                 ;; [source[0:32], slot1_offset, addr, i, ..]
 
   ;; Read source[32:48] and target[0:16] from slot 2.
-  swap1                 ;; [slot1_offset, source[0:32], addr, record_offset, i, ..]
-  push 1                ;; [1, slot1_offset, source[0:32], addr, record_offset, i, ..]
-  add                   ;; [slot2_offset, source[0:32], addr, record_offset, i, ..]
-  dup1                  ;; [slot2_offset, slot2_offset, source[0:32], addr, record_offset, i, ..]
-  sload                 ;; [src[32:48] ++ tgt[0:16], slot2_offset, source[0:32], addr, record_offset, i, ..]
+  swap1                 ;; [slot1_offset, source[0:32], addr, i, ..]
+  push 1                ;; [1, slot1_offset, source[0:32], addr, i, ..]
+  add                   ;; [slot2_offset, source[0:32], addr, i, ..]
+  dup1                  ;; [slot2_offset, slot2_offset, source[0:32], addr, i, ..]
+  sload                 ;; [src[32:48] ++ tgt[0:16], slot2_offset, source[0:32], addr, i, ..]
 
   ;; Read target[16:48] from slot 3.
-  swap1                 ;; [slot2_offset, src[32:48] ++ tgt[0:16], source[0:32], addr, record_offset, i, ..]
-  push 1                ;; [1, slot2_offset, src[32:48] ++ tgt[0:16], source[0:32], addr, record_offset, i, ..]
-  add                   ;; [slot3_offset, src[32:48] ++ tgt[0:16], source[0:32], addr, record_offset, i, ..]
-  sload                 ;; [target[16:32], src[32:48] ++ tgt[0:16], source[0:32], addr, record_offset, i, ..]
+  swap1                 ;; [slot2_offset, src[32:48] ++ tgt[0:16], source[0:32], addr, i, ..]
+  push 1                ;; [1, slot2_offset, src[32:48] ++ tgt[0:16], source[0:32], addr, i, ..]
+  add                   ;; [slot3_offset, src[32:48] ++ tgt[0:16], source[0:32], addr, i, ..]
+  sload                 ;; [target[16:32], src[32:48] ++ tgt[0:16], source[0:32], addr, i, ..]
 
   ;; Write values to memory flat and contiguously. This require combining the
   ;; four storage elements
   ;; (addr, source[0:32], source[32:48] ++ target[0:16], target[16:48])
   ;; so there is no padding.
 
+  ;; Compute offset = i*RECORD_SIZE.
+
+  dup5                  ;; [i, target[16:32], src[32:48] ++ tgt[0:16], source[0:32], addr, i, ..]
+  push RECORD_SIZE      ;; [size, i, target[16:32], src[32:48] ++ tgt[0:16], source[0:32], addr, i, ..]
+  mul                   ;; [offset, target[16:32], src[32:48] ++ tgt[0:16], source[0:32], addr, i, ..]
+
   ;; Shift addr bytes.
-  swap3                 ;; [addr, src[32:48] ++ tgt[0:16], source[0:32], target[16:32], record_offset, i, ..]
-  push 12*8             ;; [96, addr, src[32:48] ++ tgt[0:16], source[0:32], target[16:32], record_offset, i, ..]
-  shl                   ;; [addr<<96, src[32:48] ++ tgt[0:16], source[0:32], target[16:32], record_offset, i, ..]
+  swap4                 ;; [addr, src[32:48] ++ tgt[0:16], source[0:32], target[16:32], offset, i, ..]
+  push 12*8             ;; [96, addr, src[32:48] ++ tgt[0:16], source[0:32], target[16:32], offset, i, ..]
+  shl                   ;; [addr<<96, src[32:48] ++ tgt[0:16], source[0:32], target[16:32], offset, i, ..]
 
   ;; Store addr at offset = i*RECORD_SIZE.
-  dup5                  ;; [record_offset, addr<<96, src[32:48] ++ tgt[0:16], source[0:32], target[16:32], record_offset, i, ..]
-  mstore                ;; [src[32:48] ++ tgt[0:16], source[0:32], target[16:32], record_offset, i, ..]
+  dup5                  ;; [offset, addr<<96, offset, src[32:48] ++ tgt[0:16], source[0:32], target[16:32], i, ..]
+  mstore                ;; [offset, src[32:48] ++ tgt[0:16], source[0:32], target[16:32], i, ..]
 
   ;; Store source[0:32] at offset = i*RECORD_SIZE + 20.
-  swap1                 ;; [source[0:32], src[32:48] ++ tgt[0:16], target[16:32], record_offset, i, ..]
-  dup4                  ;; [record_offset, source[0:32], src[32:48] ++ tgt[0:16], target[16:32], record_offset, i, ..]
-  push 20               ;; [20, record_offset, source[0:32], src[32:48] ++ tgt[0:16], target[16:32], record_offset, i, ..]
-  add                   ;; [record_offset+20, source[0:32], src[32:48] ++ tgt[0:16], target[16:32], record_offset, i, ..]
-  mstore                ;; [src[32:48] ++ tgt[0:16], target[16:32], record_offset, i, ..]
+  swap2                 ;; [source[0:32], src[32:48] ++ tgt[0:16], target[16:32], offset, i, ..]
+  dup4                  ;; [offset, source[0:32], src[32:48] ++ tgt[0:16], target[16:32], offset, i, ..]
+  push 20               ;; [20, offset, source[0:32], src[32:48] ++ tgt[0:16], target[16:32], offset, i, ..]
+  add                   ;; [offset+20, source[0:32], src[32:48] ++ tgt[0:16], target[16:32], offset, i, ..]
+  mstore                ;; [src[32:48] ++ tgt[0:16], target[16:32], offset, i, ..]
 
   ;; Store src[32:48] ++ tgt[0:16] at offset = i*RECORD_SIZE + 52.
-  dup3                  ;; [record_offset, src[32:48] ++ tgt[0:16], target[16:32], record_offset, i, ..]
-  push 52               ;; [52, record_offset, src[32:48] ++ tgt[0:16], target[16:32], record_offset, i, ..]
-  add                   ;; [record_offset+52, src[32:48] ++ tgt[0:16], target[16:32], record_offset, i, ..]
-  mstore                ;; [target[16:32], record_offset, i, ..]
+  dup3                  ;; [offset, src[32:48] ++ tgt[0:16], target[16:32], offset, i, ..]
+  push 52               ;; [52, offset, src[32:48] ++ tgt[0:16], target[16:32], offset, i, ..]
+  add                   ;; [offset+52, src[32:48] ++ tgt[0:16], target[16:32], offset, i, ..]
+  mstore                ;; [target[16:32], offset, i, ..]
 
   ;; Store target[16:48] at offset = i*RECORD_SIZE + 84.
-  swap1                 ;; [record_offset, target[16:32], i, ..]
-  push 84               ;; [84, record_offset, target[16:32], i, ..]
-  add                   ;; [record_offset+84, target[16:32], i, ..]
+  swap1                 ;; [offset, target[16:32], i, ..]
+  push 84               ;; [84, offset, target[16:32], i, ..]
+  add                   ;; [offset+84, target[16:32], i, ..]
   mstore                ;; [i, ..]
 
   ;; Increment i.

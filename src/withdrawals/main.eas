@@ -59,28 +59,11 @@
   ;; This is the default code path. It will attempt to record a user's request
   ;; so long as they pay the required fee.
 
-  ;; If calldatasize == 0, return the current excess withdrawal requests.
+  ;; If calldatasize == 0, return the current excess requests.
   calldatasize          ;; [calldatasize]
   iszero                ;; [calldatasize == 0]
-  iszero                ;; [calldatasize != 0]
-  jumpi @check_input
+  jumpi @read_excess
 
-  ;; Reject any callvalue here to prevent lost funds.
-  callvalue             ;; [value]
-  iszero                ;; [value == 0]
-  iszero                ;; [value != 0]
-  jumpi @revert
-
-  ;; Load excess withdrawal requests and return the value.
-  push SLOT_EXCESS      ;; [excess_reqs_slot]
-  sload                 ;; [excess_reqs]
-  push0                 ;; [0, excess_reqs]
-  mstore                ;; []
-  push 32               ;; [32]
-  push 0                ;; [0, 32]
-  return                ;; []
-
-check_input:
   ;; Input data has the following layout:
   ;;
   ;;  +--------+--------+
@@ -119,7 +102,7 @@ check_input:
   sload                 ;; [req_count]
   push1 1               ;; [1, req_count]
   add                   ;; [req_count+1]
-  push SLOT_COUNT
+  push SLOT_COUNT       ;; [slot, req_count+1]
   sstore                ;; []
 
   ;; Now insert request into queue. First, compute the base storage slot
@@ -128,7 +111,7 @@ check_input:
   dup1                  ;; [tail_idx, tail_idx]
   push1 3               ;; [3, tail_idx, tail_idx]
   mul                   ;; [3*tail_idx, tail_idx]
-  push QUEUE_OFFSET
+  push QUEUE_OFFSET     ;; [ost, 3*tail_idx, tail_idx]
   add                   ;; [slot, tail_idx]
 
   ;; Write address to queue.
@@ -177,6 +160,23 @@ check_input:
   sstore                ;; []
 
   stop
+
+read_excess:
+  ;; This is the read path, where we return the current excess.
+  ;; Reject any callvalue here to prevent lost funds.
+  callvalue             ;; [value]
+  iszero                ;; [value == 0]
+  iszero                ;; [value != 0]
+  jumpi @revert
+
+  ;; Load excess withdrawal requests and return the value.
+  push SLOT_EXCESS      ;; [excess_reqs_slot]
+  sload                 ;; [excess_reqs]
+  push0                 ;; [0, excess_reqs]
+  mstore                ;; []
+  push 32               ;; [32]
+  push 0                ;; [0, 32]
+  return                ;; []
 
 ;; -----------------------------------------------------------------------------
 ;; SYSTEM SUBROUTINE -----------------------------------------------------------
@@ -236,41 +236,39 @@ accum_loop:
   eq                    ;; [i == count, i, count, head_idx, tail_idx]
   jumpi @update_head    ;; [i, count, head_idx, tail_idx]
 
-  ;; Precompute record_offset = i*RECORD_SIZE.
-  dup1                  ;; [i, i, count, head_idx, tail_idx]
-  push RECORD_SIZE      ;; [size, i, i, count, head_idx, tail_idx]
-  mul                   ;; [record_offset, i, count, head_idx, tail_idx]
-
   ;; Determine the storage slot of the address for this iteration. This value is
   ;; also the base for the other two storage slots containing the public key and
   ;; amount. The base slot will be (queue_offset + queue_head*3 + i*3).
-  dup4                  ;; [head_idx, record_offset, i, ..]
-  dup3                  ;; [i, head_idx, record_offset, i, ..]
-  add                   ;; [i+head_idx, record_offset, i, ..]
-  push 3                ;; [3, i+head_idx, record_offset, i, ..]
-  mul                   ;; [3*(i+head_idx), record_offset, i, ..]
-  push QUEUE_OFFSET     ;; [offset, 3*(i+head_idx), record_offset, i, ..]
-  add                   ;; [addr_offset, record_offset, i, ..]
+  dup3                  ;; [head_idx, i, count, head_idx, ..]
+  dup2                  ;; [i, head_idx, i, ..]
+  add                   ;; [i+head_idx, i, ..]
+  push 3                ;; [3, i+head_idx, i, ..]
+  mul                   ;; [3*(i+head_idx), i, ..]
+  push QUEUE_OFFSET     ;; [offset, 3*(i+head_idx), i, ..]
+  add                   ;; [addr_offset, i, ..]
 
   ;; Read address.
-  dup1                  ;; [addr_offset, addr_offset, record_offset, i, ..]
-  sload                 ;; [addr, addr_offset, record_offset, i, ..]
+  dup1                  ;; [addr_offset, addr_offset, i, ..]
+  sload                 ;; [addr, addr_offset, i, ..]
 
-  ;; Compute pk[0:32] offset and read it.
-  swap1                 ;; [addr_offset, addr, record_offset, i, ..]
-  push 1                ;; [1, addr_offset, addr, record_offset, i, ..]
-  add                   ;; [pk1_offset, addr, record_offset, i, ..]
-  dup1                  ;; [pk1_offset, pk1_offset, addr, record_offset, i, ..]
-  sload                 ;; [pk[0:32], pk1_offset, addr, record_offset, i, ..]
+  ;; Compute pk1 offset and read it.
+  swap1                 ;; [addr_offset, addr, i, ..]
+  push 1                ;; [1, addr_offset, addr, i, ..]
+  add                   ;; [pk1_offset, addr, i, ..]
+  dup1                  ;; [pk1_offset, pk1_offset, addr, i, ..]
+  sload                 ;; [pk1, pk1_offset, addr, i, ..]
 
   ;; Compute pk2_am offset and read it.
-  swap1                 ;; [pk1_offset, pk[0:32], addr, record_offset, i, ..]
-  push 1                ;; [1, pk1_offset, pk[0:32], addr, record_offset, i, ..]
-  add                   ;; [pk2_am_offset, pk[0:32], addr, record_offset, i, ..]
-  sload                 ;; [pk2_am, pk[0:32], addr, record_offset, i, ..]
+  swap1                 ;; [pk1_offset, pk1, addr, i, ..]
+  push 1                ;; [1, pk1_offset, pk1, addr, i, ..]
+  add                   ;; [pk2_am_offset, pk1, addr, i, ..]
+  sload                 ;; [pk2_am, pk1, addr, i, ..]
+
+  ;; Reorder values.
+  swap2                 ;; [addr, pk1, pk2_am, i, ..]
 
   ;; Write values to memory flat and contiguously. This require combining the
-  ;; three storage elements (addr, pk[0:32], pk2_am) so there is no padding.
+  ;; three storage elements (addr, pk1, pk2_am) so there is no padding.
   ;;
   ;; Each stack element has the following layout:
   ;;
@@ -278,7 +276,7 @@ accum_loop:
   ;;  0x00 | 00 00 00 00 00 00 00 00 00 00 00 00 aa aa aa aa
   ;;  0x10 | aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa
   ;;
-  ;; B: pk[0:32]
+  ;; B: pk[0:32] -> pk1
   ;;  0x00 | bb bb bb bb bb bb bb bb bb bb bb bb bb bb bb bb
   ;;  0x10 | bb bb bb bb bb bb bb bb bb bb bb bb bb bb bb bb
   ;;
@@ -291,40 +289,47 @@ accum_loop:
   ;;
   ;;  (A[12:32] ++ B[0:12], B[12:32] ++ C[0:12], C[12:24])
 
+  ;; Compute offset = i*RECORD_SIZE.
+  dup4                  ;; [i, addr, pk1, pk2_am, i, ..]
+  push RECORD_SIZE      ;; [size, i, addr, pk1, pk2_am, i, ..]
+  mul                   ;; [offset, addr, pk1, pk2_am, i, ..]
+
   ;; Shift addr bytes.
-  swap2                 ;; [addr, pk[0:32], pk2_am, record_offset, i, ..]
-  push 12*8             ;; [96, addr, pk[0:32], pk2_am, record_offset, i, ..]
-  shl                   ;; [addr<<96, pk[0:32], pk2_am, record_offset, i, ..]
+  swap1                 ;; [addr, offset, pk1, pk2_am, i, ..]
+  push 12*8             ;; [96, addr, offset, pk1, pk2_am, i, ..]
+  shl                   ;; [addr<<96, offset, pk1, pk2_am, i, ..]
 
-  ;; Store addr at offset = i*RECORD_SIZE.
-  dup4                  ;; [record_offset, addr<<96, pk[0:32], pk2_am, record_offset, i, ..]
-  mstore                ;; [pk[0:32], pk2_am, record_offset, i, ..]
+  ;; Store addr at current offset.
+  dup2                  ;; [offset, addr<<96, offset, pk1, pk2_am, i, ..]
+  mstore                ;; [offset, pk1, pk2_am, i, ..]
+  push 20               ;; [20, offset, pk1, pk2_am, i, ..]
+  add                   ;; [offset, pk1, pk2_am, i, ..]
 
-  ;; Store pk[0:32] at offset = i*RECORD_SIZE + 20.
-  dup3                  ;; [record_offset, pk[0:32], pk2_am, record_offset, i, ..]
-  push 20               ;; [20, record_offset, pk[0:32], pk2_am, record_offset, i, ..]
-  add                   ;; [record_offset+20, pk[0:32], pk2_am, record_offset, i, ..]
-  mstore                ;; [pk2_am, record_offset, i, ..]
+  ;; Store pk1 at offset = i*RECORD_SIZE + 20.
+  swap1                 ;; [pk1, offset, pk2_am, i, ..]
+  dup2                  ;; [offset, pk1, offset, pk2_am, i, ..]
+  mstore                ;; [offset, pk2_am, i, ..]
+  push 32               ;; [32, offset, pk2_am, i, ..]
+  add                   ;; [offset, pk2_am, i, ..]
 
   ;; Extract pk2 from pk2_am.
-  dup1                  ;; [pk2_am, pk2_am, record_offset, i, ..]
-  push pk2_mask         ;; [mask, pk2_am, pk2_am, record_offset, i, ..]
-  and                   ;; [pk2, pk2_am, record_offset, i, ..]
+  dup2                  ;; [pk2_am, offset, pk2_am, i, ..]
+  push pk2_mask         ;; [mask, pk2_am, offset, pk2_am, i, ..]
+  and                   ;; [pk2, offset, pk2_am, i, ..]
 
   ;; Store pk2 at offset = i*RECORD_SIZE + 52.
-  dup3                  ;; [record_offset, pk2, pk2_am, record_offset, i, ..]
-  push 52               ;; [52, record_offset, pk2, pk2_am, record_offset, i, ..]
-  add                   ;; [record_offset+52, pk2, pk2_am, record_offset, i, ..]
-  mstore                ;; [pk2_am, record_offset, i, ..]
+  dup2                  ;; [offset, pk2, offset, pk2_am, i, ..]
+  mstore                ;; [offset, pk2_am, i, ..]
+  push 16               ;; [16, offset, pk2_am, i, ..]
+  add                   ;; [offset, pk2_am, i, ..]
 
   ;; Extract am from pk2_am.
-  push 8*8              ;; [shft, pk2_am, record_offset, i, ..]
-  shr                   ;; [am, record_offset, i, ..]
+  swap1                 ;; [pk2_am, offset, i, ..]
+  push 8*8              ;; [shft, pk2_am, offset, i, ..]
+  shr                   ;; [am, offset, i, ..]
 
   ;; Store am at offset = i*RECORD_SIZE + 68.
-  swap1                 ;; [record_offset, am, i, ..]
-  push 68               ;; [68, record_offset, am, i, ..]
-  add                   ;; [record_offset+68, am, i, ..]
+  swap1                 ;; [offset, am, i, ..]
   %mstore_uint64_le()   ;; [i, ..]
 
   ;; Increment i.
