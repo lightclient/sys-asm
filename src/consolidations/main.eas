@@ -1,7 +1,7 @@
-;; ▗▄▄▄▖▄▄▄▄ ▄▄▄▄ ▄ ▗▞▀▜▌ ▄▄▄  
-;;    ▐▌   █ █    █ ▝▚▄▟▌▀▄▄  ▄▄▄▄          
-;;    ▐▌█▀▀▀ ▀▀▀█ █      ▄▄▄▀ █ █ █         
-;;    ▐▌█▄▄▄ ▄▄▄█ █           █   █              
+;; ▗▄▄▄▖▄▄▄▄ ▄▄▄▄ ▄ ▗▞▀▜▌ ▄▄▄
+;;    ▐▌   █ █    █ ▝▚▄▟▌▀▄▄  ▄▄▄▄
+;;    ▐▌█▀▀▀ ▀▀▀█ █      ▄▄▄▀ █ █ █
+;;    ▐▌█▄▄▄ ▄▄▄█ █           █   █
 
 ;; This is an implementation of EIP-7251 style contract handling EL triggerred
 ;; consolidations. It leverages on the fee mechanism and the queue design of the
@@ -50,29 +50,6 @@
   ;; --------------------------------------------------------------------------
   ;; USER SUBROUTINE ----------------------------------------------------------
   ;; --------------------------------------------------------------------------
-  ;;
-  ;; Record new request ~~
-  ;; This is the default code path. It will attempt to record a user's request
-  ;; so long as they pay the required fee.
-
-  ;; If calldatasize == 0, return the current excess requests.
-  calldatasize          ;; [calldatasize]
-  iszero                ;; [calldatasize == 0]
-  jumpi @read_excess
-
-  ;; Input data has the following layout:
-  ;;
-  ;;  +--------+--------+
-  ;;  | source | target |
-  ;;  +--------+--------+
-  ;;      48       48
-
-  ;; Verify the input is exactly INPUT_SIZE bytes.
-  calldatasize          ;; [calldatasize]
-  push INPUT_SIZE       ;; [INPUT_SIZE, calldatasize]
-  eq                    ;; [INPUT_SIZE == calldatasize]
-  iszero                ;; [INPUT_SIZE != calldatasize]
-  jumpi @revert         ;; []
 
   ;; Compute the fee using fake expo and the current excess requests.
   push FEE_UPDATE_FRACTION
@@ -87,6 +64,41 @@
 
   push MIN_FEE          ;; [min_fee, excess, update_fraction]
   #include "../common/fake_expo.eas"
+
+  ;; If calldatasize matches the expected input size, go to adding the request.
+  calldatasize          ;; [calldatasize, req_fee]
+  push INPUT_SIZE       ;; [INPUT_SIZE, calldatasize, req_fee]
+  eq                    ;; [INPUT_SIZE == calldatasize, req_fee]
+  jumpi @handle_input   ;; [req_fee]
+
+  ;; Otherwise calldatasize must be zero.
+  calldatasize          ;; [calldatasize, req_fee]
+  iszero                ;; [calldatasize == 0, req_fee]
+  iszero                ;; [calldatasize != 0, req_fee]
+  jumpi @revert         ;; [req_fee]
+
+  ;; This is the read path, where we return the current excess.
+  ;; Reject any callvalue here to prevent lost funds.
+  callvalue             ;; [value, req_fee]
+  iszero                ;; [value == 0, req_fee]
+  iszero                ;; [value != 0, req_fee]
+  jumpi @revert         ;; [req_fee]
+
+  ;; Load excess requests and return the value.
+  push 0                ;; [0, req_fee]
+  mstore                ;; []
+  push 32               ;; [32]
+  push 0                ;; [0, 32]
+  return                ;; []
+
+handle_input:
+  ;; This is the write path. We expect the computed fee on the stack.
+  ;; Input data has the following layout:
+  ;;
+  ;;  +--------+--------+
+  ;;  | source | target |
+  ;;  +--------+--------+
+  ;;      48       48
 
   ;; Determine if the fee provided is enough to cover the request fee.
   callvalue             ;; [callvalue, req_fee]
@@ -166,23 +178,6 @@
   sstore                ;; []
 
   stop
-
-read_excess:
-  ;; This is the read path, where we return the current excess.
-  ;; Reject any callvalue here to prevent lost funds.
-  callvalue             ;; [value]
-  iszero                ;; [value == 0]
-  iszero                ;; [value != 0]
-  jumpi @revert
-
-  ;; Load excess requests and return the value.
-  push SLOT_EXCESS      ;; [excess_reqs_slot]
-  sload                 ;; [excess_reqs]
-  push 0                ;; [0, excess_reqs]
-  mstore                ;; []
-  push 32               ;; [32]
-  push 0                ;; [0, 32]
-  return                ;; []
 
 ;; ----------------------------------------------------------------------------
 ;; SYSTEM SUBROUTINE ----------------------------------------------------------
