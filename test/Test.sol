@@ -50,8 +50,9 @@ abstract contract Test is StdTest {
   // system contract matches count.
   function assertExcess(uint256 count) internal {
     assertStorage(excess_slot, count, "unexpected excess requests");
+    uint256 expectedFee = computeFee(count);
     (, bytes memory data) = addr.call("");
-    assertEq(toFixed(data, 0, 32), count, "unexpected excess requests");
+    assertEq(uint256(bytes32(data)), expectedFee, "unexpected fee returned");
   }
 }
 
