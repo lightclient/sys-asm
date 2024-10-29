@@ -70,7 +70,7 @@
   push MIN_FEE          ;; [min_fee, excess, update_fraction]
   #include "../common/fake_expo.eas"
 
-  ;; If calldatasize matches the expected input size, add the request.
+  ;; If calldatasize matches the expected input size, go to adding the request.
   calldatasize          ;; [calldatasize, req_fee]
   push INPUT_SIZE       ;; [INPUT_SIZE, calldatasize, req_fee]
   eq                    ;; [INPUT_SIZE == calldatasize, req_fee]
@@ -89,7 +89,7 @@
   iszero                ;; [value != 0, req_fee]
   jumpi @revert
 
-  ;; Load excess withdrawal requests and return the value.
+  ;; Return req_fee.
   push 0                ;; [0, req_fee]
   mstore                ;; []
   push 32               ;; [32]
