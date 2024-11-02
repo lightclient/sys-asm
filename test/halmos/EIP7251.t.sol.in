@@ -94,10 +94,16 @@ contract EIP7251Test is SymTest, Test {
 
         // get_excess_consolidation_requests() operation
         if (data.length == 0) {
-            assertTrue(success);
-            assertEq(uint256(bytes32(retdata)), initState.excess);
-            // ensure no storage updates
-            assertEq(newState.anySlotValue, initState.anySlotValue);
+            if (success) {
+                assertEq(uint256(bytes32(retdata)), initState.excess);
+                // ensure no storage updates
+                assertEq(newState.anySlotValue, initState.anySlotValue);
+                assertEq(value, 0);
+            } else {
+                // reject callvalue when calldatasize == 0
+                // https://github.com/lightclient/sys-asm/pull/28
+                assertNotEq(value, 0);
+            }
 
         // add_consolidation_request() operation
         } else if (data.length == INPUT_SIZE) {
