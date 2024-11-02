@@ -32,6 +32,10 @@ sed \
     "$SCRIPT_DIR/test/Consolidation.t.sol.in" > "$SCRIPT_DIR/test/Consolidation.t.sol"
 
 sed \
+    -e "s/@bytecode@/$EXECHASH_BYTECODE/" \
+    "$SCRIPT_DIR/test/halmos/EIP2935.t.sol.in" > "$SCRIPT_DIR/test/halmos/EIP2935.t.sol"
+
+sed \
     -e "s/@bytecode@/$WITHDRAWALS_BYTECODE/" \
     "$SCRIPT_DIR/test/halmos/EIP7002.t.sol.in" > "$SCRIPT_DIR/test/halmos/EIP7002.t.sol"
 
