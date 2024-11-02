@@ -4,6 +4,7 @@ set -euf -o pipefail
 SCRIPT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]:-$0}"; )" &> /dev/null && pwd 2> /dev/null; )";
 
 BEACONROOT_BYTECODE="$(geas "src/beacon_root/main.eas")"
+EXECHASH_BYTECODE="$(geas "src/execution_hash/main.eas")"
 WITHDRAWALS_BYTECODE="$(geas "src/withdrawals/main.eas")"
 CONSOLODATIONS_BYTECODE="$(geas "src/consolidations/main.eas")"
 FAKE_EXPO_BYTECODE="$(geas "src/common/fake_expo_test.eas")"
@@ -11,6 +12,10 @@ FAKE_EXPO_BYTECODE="$(geas "src/common/fake_expo_test.eas")"
 sed \
     -e "s/@bytecode@/$BEACONROOT_BYTECODE/" \
     "$SCRIPT_DIR/test/BeaconRoot.t.sol.in" > "$SCRIPT_DIR/test/BeaconRoot.t.sol"
+
+sed \
+    -e "s/@bytecode@/$EXECHASH_BYTECODE/" \
+    "$SCRIPT_DIR/test/ExecutionHash.t.sol.in" > "$SCRIPT_DIR/test/ExecutionHash.t.sol"
 
 sed \
     -e "s/@bytecode@/$WITHDRAWALS_BYTECODE/" \
