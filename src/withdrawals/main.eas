@@ -78,15 +78,11 @@
 
   ;; Otherwise calldatasize must be zero.
   calldatasize          ;; [calldatasize, req_fee]
-  iszero                ;; [calldatasize == 0, req_fee]
-  iszero                ;; [calldatasize != 0, req_fee]
   jumpi @revert         ;; [req_fee]
 
   ;; This is the read path, where we return the current fee.
   ;; Reject any callvalue here to prevent lost funds.
   callvalue             ;; [value, req_fee]
-  iszero                ;; [value == 0, req_fee]
-  iszero                ;; [value != 0, req_fee]
   jumpi @revert
 
   ;; Return req_fee.
