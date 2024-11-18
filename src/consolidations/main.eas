@@ -369,7 +369,7 @@ update_excess:
   iszero                ;; [inhibitor != excess, excess, count]
   jumpi @skip_reset     ;; [excess, count]
 
-  ;; Drop the excess from storage and use 0.
+  ;; Drop the excess from stack and use 0.
   pop                   ;; [count]
   push 0                ;; [reset_excess, count]
 
