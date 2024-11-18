@@ -201,7 +201,7 @@ handle_input:
 ;; reset.
 read_requests:
   ;; Determine the size of the queue by calculating tail - head.
-  push QUEUE_TAIL       ;; [tail_idx_slot, head_idx, head_idx]
+  push QUEUE_TAIL       ;; [tail_idx_slot]
   sload                 ;; [tail_idx]
   push QUEUE_HEAD       ;; [head_idx_slot, tail_idx]
   sload                 ;; [head_idx, tail_idx]
