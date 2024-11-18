@@ -1,4 +1,6 @@
 [profile.default]
+evm_version = 'prague'
 src = 'src'
 out = 'out'
+ffi = true
 libs = ['lib']

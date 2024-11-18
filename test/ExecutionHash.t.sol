@@ -2,6 +2,7 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
+import "geas-ffi/Geas.sol";
 import "../src/Contract.sol";
 
 address constant addr = 0x000000000000000000000000000000000000aaaa;
@@ -18,40 +19,37 @@ function hash_idx() view returns (bytes32) {
 }
 
 contract ContractTest is Test {
-    address unit;
-
     function setUp() public {
-        vm.etch(addr, hex"@bytecode@");
-        unit = addr;
+        vm.etch(addr, Geas.compile("src/execution_hash/main.eas"));
     }
 
     // testRead verifies the contract returns the expected execution hash.
     function testExecRead() public {
         // Store hash at expected indexes.
-        vm.store(unit, hash_idx(), hash);
+        vm.store(addr, hash_idx(), hash);
 
         // Read hash associated with current timestamp.
-        (bool ret, bytes memory data) = unit.call(bytes.concat(lastBlockNumber()));
+        (bool ret, bytes memory data) = addr.call(bytes.concat(lastBlockNumber()));
         assertTrue(ret);
         assertEq(data, bytes.concat(hash));
     }
 
     function testReadBadCalldataSize() public {
         // Store hash at expected indexes.
-        vm.store(unit, hash_idx(), hash);
+        vm.store(addr, hash_idx(), hash);
 
         // Call with 0 byte arguement.
-        (bool ret, bytes memory data) = unit.call(hex"");
+        (bool ret, bytes memory data) = addr.call(hex"");
         assertFalse(ret);
         assertEq(data, hex"");
 
         // Call with 31 byte arguement.
-        (ret, data) = unit.call(hex"00000000000000000000000000000000000000000000000000000000001337");
+        (ret, data) = addr.call(hex"00000000000000000000000000000000000000000000000000000000001337");
         assertFalse(ret);
         assertEq(data, hex"");
 
         // Call with 33 byte arguement.
-        (ret, data) = unit.call(hex"000000000000000000000000000000000000000000000000000000000000001337");
+        (ret, data) = addr.call(hex"000000000000000000000000000000000000000000000000000000000000001337");
         assertFalse(ret);
         assertEq(data, hex"");
     }
@@ -62,25 +60,25 @@ contract ContractTest is Test {
         uint256 number = block.number-1;
 
         // Store hash at expected indexes.
-        vm.store(unit, hash_idx(), hash);
+        vm.store(addr, hash_idx(), hash);
 
         // Request current block.
-        (bool ret, bytes memory data) = unit.call(bytes.concat(bytes32(block.number)));
+        (bool ret, bytes memory data) = addr.call(bytes.concat(bytes32(block.number)));
         assertFalse(ret);
         assertEq(data, hex"");
 
         // Wrap around buflen once forward.
-        (ret, data) = unit.call(bytes.concat(bytes32(number+buflen)));
+        (ret, data) = addr.call(bytes.concat(bytes32(number+buflen)));
         assertFalse(ret);
         assertEq(data, hex"");
 
         // Wrap around buflen once backward.
-        (ret, data) = unit.call(bytes.concat(bytes32(number-buflen)));
+        (ret, data) = addr.call(bytes.concat(bytes32(number-buflen)));
         assertFalse(ret);
         assertEq(data, hex"");
 
         // Block number zero should fail.
-        (ret, data) = unit.call(bytes.concat(bytes32(0)));
+        (ret, data) = addr.call(bytes.concat(bytes32(0)));
         assertFalse(ret);
         assertEq(data, hex"");
     }
@@ -89,12 +87,12 @@ contract ContractTest is Test {
     function testUpdate() public {
         // Simulate pre-block call to set hash.
         vm.prank(sysaddr);
-        (bool ret, bytes memory data) = unit.call(bytes.concat(hash));
+        (bool ret, bytes memory data) = addr.call(bytes.concat(hash));
         assertTrue(ret);
         assertEq(data, hex"");
 
         // Verify hash.
-        bytes32 got = vm.load(unit, hash_idx());
+        bytes32 got = vm.load(addr, hash_idx());
         assertEq(got, hash);
     }
 
@@ -110,13 +108,13 @@ contract ContractTest is Test {
 
             // Simulate pre-block call to set hash.
             vm.prank(sysaddr);
-            (bool ret, bytes memory data) = unit.call(bytes.concat(pbbr));
+            (bool ret, bytes memory data) = addr.call(bytes.concat(pbbr));
             assertTrue(ret);
             assertEq(data, hex"");
 
             // Call contract as normal account to get exeuction hash associated
             // with current timestamp.
-            (ret, data) = unit.call(bytes.concat(lastBlockNumber()));
+            (ret, data) = addr.call(bytes.concat(lastBlockNumber()));
             assertTrue(ret);
             assertEq(data, bytes.concat(pbbr));
 
@@ -136,7 +134,7 @@ contract ContractTest is Test {
         for (uint256 i = 0; i < buflen; i += 1) {
             bytes32 pbbr = bytes32(i*1337);
             vm.prank(sysaddr);
-            (bool ret, bytes memory data) = unit.call(bytes.concat(pbbr));
+            (bool ret, bytes memory data) = addr.call(bytes.concat(pbbr));
             assertTrue(ret);
             assertEq(data, hex"");
             if (i+1 < buflen) {
@@ -152,7 +150,7 @@ contract ContractTest is Test {
         // Attempt to read all values in same block context.
         for (uint256 i = 0; i < buflen; i += 1) {
             bytes32 num = bytes32(uint256(base+i));
-            (bool ret, bytes memory got) = unit.call(bytes.concat(num));
+            (bool ret, bytes memory got) = addr.call(bytes.concat(num));
             assertTrue(ret);
             assertEq(got, bytes.concat(bytes32(i*1337)));
         }
