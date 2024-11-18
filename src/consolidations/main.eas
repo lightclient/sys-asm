@@ -244,7 +244,7 @@ accum_loop:
   push QUEUE_OFFSET     ;; [offset, 4*(i+head_idx), i, ..]
   add                   ;; [slotbase, i, ..]
 
-  ;; Write values to memory flat and contiguously. This require combining the
+  ;; Write values to memory flat and contiguously. This requires combining the
   ;; four storage elements (addr, spk1, spk2_tpk1, tpk2) so there is no padding.
   ;;
   ;; The slots have the following layout:
