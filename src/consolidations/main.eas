@@ -234,77 +234,89 @@ accum_loop:
   jumpi @update_head    ;; [i, count, head_idx, tail_idx]
 
   ;; Determine the storage slot of the address for this iteration. This value is
-  ;; also the base for the other storage slots containing the source and the target
-  ;; public keys. The base slot will be (queue_offset + (queue_head + i)*SLOTS_PER_ITEM).
+  ;; also the base for the other storage slots containing the source and target
+  ;; public keys. The base slot will be (queue_offset + (queue_head + i)*4).
   dup3                  ;; [head_idx, i, ..]
   dup2                  ;; [i, head_idx, i, ..]
   add                   ;; [i+head_idx, i, ..]
-  push SLOTS_PER_ITEM   ;; [SLOTS_PER_ITEM, i+head_idx, i, ..]
-  mul                   ;; [SLOTS_PER_ITEM*(i+head_idx), i, ..]
-  push QUEUE_OFFSET     ;; [offset, SLOTS_PER_ITEM*(i+head_idx), i, ..]
-  add                   ;; [addr_offset, i, ..]
+  push SLOTS_PER_ITEM   ;; [4, i+head_idx, i, ..]
+  mul                   ;; [4*(i+head_idx), i, ..]
+  push QUEUE_OFFSET     ;; [offset, 4*(i+head_idx), i, ..]
+  add                   ;; [slotbase, i, ..]
 
-  ;; Read address from slot 0.
-  dup1                  ;; [addr_offset, addr_offset, i, ..]
-  sload                 ;; [addr, addr_offset, i, ..]
+  ;; Write values to memory flat and contiguously. This requires combining the
+  ;; four storage elements (addr, spk1, spk2_tpk1, tpk2) so there is no padding.
+  ;;
+  ;; The slots have the following layout:
+  ;;
+  ;; 0: addr
+  ;;  0x00 | 00 00 00 00 00 00 00 00 00 00 00 00 aa aa aa aa
+  ;;  0x10 | aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa
+  ;;
+  ;; 1: source[0:32] -> spk1
+  ;;  0x00 | bb bb bb bb bb bb bb bb bb bb bb bb bb bb bb bb
+  ;;  0x10 | bb bb bb bb bb bb bb bb bb bb bb bb bb bb bb bb
+  ;;
+  ;; 2: source[32:48] ++ target[0:16] -> spk2_tpk1
+  ;;  0x00 | bb bb bb bb bb bb bb bb bb bb bb bb bb bb bb bb
+  ;;  0x10 | cc cc cc cc cc cc cc cc cc cc cc cc cc cc cc cc
+  ;;
+  ;; 3: target[16:48] -> tpk2
+  ;;  0x20 | cc cc cc cc cc cc cc cc cc cc cc cc cc cc cc cc
+  ;;  0x30 | cc cc cc cc cc cc cc cc cc cc cc cc cc cc cc cc
 
-  ;; Read source[0:32] from slot 1.
-  swap1                 ;; [addr_offset, addr, i, ..]
-  push 1                ;; [1, addr_offset, addr, i, ..]
-  add                   ;; [slot1_offset, addr, i, ..]
-  dup1                  ;; [slot1_offset, slot1_offset, addr, i, ..]
-  sload                 ;; [source[0:32], slot1_offset, addr, i, ..]
+  ;; Compute the output offset = i*RECORD_SIZE.
+  dup2                  ;; [i, slotbase, i, ..]
+  push RECORD_SIZE      ;; [size, i, slotbase, i, ..]
+  mul                   ;; [offset=size*i, slotbase, i, ..]
 
-  ;; Read source[32:48] and target[0:16] from slot 2.
-  swap1                 ;; [slot1_offset, source[0:32], addr, i, ..]
-  push 1                ;; [1, slot1_offset, source[0:32], addr, i, ..]
-  add                   ;; [slot2_offset, source[0:32], addr, i, ..]
-  dup1                  ;; [slot2_offset, slot2_offset, source[0:32], addr, i, ..]
-  sload                 ;; [src[32:48] ++ tgt[0:16], slot2_offset, source[0:32], addr, i, ..]
-
-  ;; Read target[16:48] from slot 3.
-  swap1                 ;; [slot2_offset, src[32:48] ++ tgt[0:16], source[0:32], addr, i, ..]
-  push 1                ;; [1, slot2_offset, src[32:48] ++ tgt[0:16], source[0:32], addr, i, ..]
-  add                   ;; [slot3_offset, src[32:48] ++ tgt[0:16], source[0:32], addr, i, ..]
-  sload                 ;; [target[16:32], src[32:48] ++ tgt[0:16], source[0:32], addr, i, ..]
-
-  ;; Write values to memory flat and contiguously. This require combining the
-  ;; four storage elements so there is no padding:
-  ;; (addr, source[0:32], source[32:48] ++ target[0:16], target[16:48])
-
-  ;; Compute offset = i*RECORD_SIZE.
-
-  dup5                  ;; [i, target[16:32], src[32:48] ++ tgt[0:16], source[0:32], addr, i, ..]
-  push RECORD_SIZE      ;; [size, i, target[16:32], src[32:48] ++ tgt[0:16], source[0:32], addr, i, ..]
-  mul                   ;; [offset, target[16:32], src[32:48] ++ tgt[0:16], source[0:32], addr, i, ..]
+  ;; Read slot 'addr' from storage.
+  dup2                  ;; [slotbase, offset, slotbase, ..]
+  sload                 ;; [addr, offset, slotbase, ..]
 
   ;; Shift addr bytes.
-  swap4                 ;; [addr, src[32:48] ++ tgt[0:16], source[0:32], target[16:32], offset, i, ..]
-  push 12*8             ;; [96, addr, src[32:48] ++ tgt[0:16], source[0:32], target[16:32], offset, i, ..]
-  shl                   ;; [addr<<96, src[32:48] ++ tgt[0:16], source[0:32], target[16:32], offset, i, ..]
+  push 12*8             ;; [96, addr, offset, slotbase, ..]
+  shl                   ;; [addr<<96, offset, slotbase, ..]
 
   ;; Store addr at offset = i*RECORD_SIZE.
-  dup5                  ;; [offset, addr<<96, offset, src[32:48] ++ tgt[0:16], source[0:32], target[16:32], i, ..]
-  mstore                ;; [offset, src[32:48] ++ tgt[0:16], source[0:32], target[16:32], i, ..]
+  dup2                  ;; [offset, addr<<96, offset, slotbase, ..]
+  mstore                ;; [offset, slotbase, ..]
+  push 20               ;; [20, offset, slotbase, ..]
+  add                   ;; [offset=offset+20, slotbase, ..]
 
-  ;; Store source[0:32] at offset = i*RECORD_SIZE + 20.
-  swap2                 ;; [source[0:32], src[32:48] ++ tgt[0:16], target[16:32], offset, i, ..]
-  dup4                  ;; [offset, source[0:32], src[32:48] ++ tgt[0:16], target[16:32], offset, i, ..]
-  push 20               ;; [20, offset, source[0:32], src[32:48] ++ tgt[0:16], target[16:32], offset, i, ..]
-  add                   ;; [offset+20, source[0:32], src[32:48] ++ tgt[0:16], target[16:32], offset, i, ..]
-  mstore                ;; [src[32:48] ++ tgt[0:16], target[16:32], offset, i, ..]
+  ;; Read slot 'spk1' from storage.
+  dup2                  ;; [slotbase, offset, slotbase, ..]
+  push 1                ;; [1, slotbase, offset, slotbase, ..]
+  add                   ;; [slot, offset, slotbase, ..]
+  sload                 ;; [spk1, offset, slotbase, ..]
 
-  ;; Store src[32:48] ++ tgt[0:16] at offset = i*RECORD_SIZE + 52.
-  dup3                  ;; [offset, src[32:48] ++ tgt[0:16], target[16:32], offset, i, ..]
-  push 52               ;; [52, offset, src[32:48] ++ tgt[0:16], target[16:32], offset, i, ..]
-  add                   ;; [offset+52, src[32:48] ++ tgt[0:16], target[16:32], offset, i, ..]
-  mstore                ;; [target[16:32], offset, i, ..]
+  ;; Store spk1 at output offset = i*RECORD_SIZE+20.
+  dup2                  ;; [offset, spk1, offset, slotbase, ..]
+  mstore                ;; [offset, slotbase, ..]
+  push 32               ;; [32, offset, slotbase, ..]
+  add                   ;; [offset=offset+32, slotbase, ..]
 
-  ;; Store target[16:48] at offset = i*RECORD_SIZE + 84.
-  swap1                 ;; [offset, target[16:32], i, ..]
-  push 84               ;; [84, offset, target[16:32], i, ..]
-  add                   ;; [offset+84, target[16:32], i, ..]
-  mstore                ;; [i, ..]
+  ;; Read slot 'spk2_tpk1' from stoarge.
+  dup2                  ;; [slotbase, offset, slotbase, ..]
+  push 2                ;; [1, slotbase, offset, slotbase, ..]
+  add                   ;; [slot, offset, slotbase, ..]
+  sload                 ;; [spk2_tpk1, offset, slotbase, ..]
+
+  ;; Store spk2_tpk1 at output offset = i*RECORD_SIZE+52.
+  dup2                  ;; [offset, src[32:48] ++ tgt[0:16], offset, slotbase, ..]
+  mstore                ;; [offset, slotbase, ..]
+  push 32               ;; [32, offset, slotbase, ..]
+  add                   ;; [offset=offset+32, slotbase, ..]
+
+  ;; Read target[16:48] from slot 3.
+  swap1                 ;; [slotbase, offset, ..]
+  push 3                ;; [3, slotbase, offset, ..]
+  add                   ;; [slot, offset, ..]
+  sload                 ;; [tpk2, offset, ..]
+
+  ;; Store tpk2 at output offset = i*RECORD_SIZE+84.
+  swap1                 ;; [offset, tpk2, ..]
+  mstore                ;; [..]
 
   ;; Increment i.
   push 1                ;; [1, i, ..]
