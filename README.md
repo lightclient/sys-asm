@@ -26,10 +26,10 @@ $ geas src/withdrawals/main.eas
 
 ## Testing
 
-The tests can be executed using the `build-wrapper` script with the same arguments as [forge][forge]:
+The tests can be executed using [forge][forge]:
 
 ```console
-$ ./build-wrapper test
+$ forge test
 [⠒] Compiling...
 [⠒] Compiling 1 files with 0.8.14
 [⠢] Solc 0.8.14 finished in 976.49ms
