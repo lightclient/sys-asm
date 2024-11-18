@@ -14,15 +14,8 @@
 ;; BUFLEN returns the HISTORY_BUFFER_LENGTH as defined in the EIP.
 #define BUFLEN 8191
 
-;; SYSADDR is the address which calls the contract to submit a new root.
+;; SYSADDR is the address which calls the contract to submit a new block hash.
 #define SYSADDR 0xfffffffffffffffffffffffffffffffffffffffe
-
-;; do_revert sets up and then executes a revert(0,0) operation.
-#define %do_revert() {
-  push 0            ;; [0]
-  push 0            ;; [0, 0]
-  revert            ;; []
-}
 
 ;; ----------------------------------------------------------------------------
 ;; MACROS END -----------------------------------------------------------------
@@ -37,20 +30,18 @@
   jumpi @submit     ;; []
 
   ;; Fallthrough if addresses don't match -- this means the caller intends
-  ;; to read a root.
+  ;; to read a block hash.
 
   ;; Verify input is 32 bytes long.
   push 32           ;; [32]
   calldatasize      ;; [calldatasize, 32]
-  eq                ;; [calldatasize == 32]
+  sub               ;; [calldatasize - 32]
 
   ;; Jump to continue if length-check passed, otherwise revert.
-  jumpi @load       ;; []
-  %do_revert()      ;; []
+  jumpi @throw      ;; []
 
-load:
-  ;; Check if input is requesting a block hash greater than current block
-  ;; number.
+  ;; Check if input is requesting a block hash greater than current block number
+  ;; minus 1.
   push 0            ;; [0]
   calldataload      ;; [input]
   push 1            ;; [1, input]
@@ -62,13 +53,11 @@ load:
 
   ;; Check if the input is requesting a block hash before the earliest available
   ;; hash currently. Since we've verfied that input <= number - 1, it's safe to
-  ;; check the following:
-  ;; number - 1 - input <= BUFLEN, which also equals: number - input < BUFLEN
-  dup1              ;; [input, input]
-  number            ;; [number, input, input]
-  sub               ;; [number - input, input]
-  push BUFLEN+1     ;; [buflen, number - input, input]
-  lt                ;; [buflen < number - input, input]
+  push BUFLEN       ;; [buflen, input]
+  dup2              ;; [input, buflen, input]
+  number            ;; [number, input, buflen, input]
+  sub               ;; [number - input, buflen, input]
+  gt                ;; [number - input > buflen, input]
   jumpi @throw      ;; [input]
 
   ;; Load the hash.
@@ -86,8 +75,9 @@ load:
 
 throw:
   ;; Reverts current execution with no return data.
-  pop
-  %do_revert()
+  push 0            ;; [0]
+  push 0            ;; [0, 0]
+  revert            ;; []
 
 submit:
   push 0            ;; [0]
