@@ -43,3 +43,9 @@ swap1       ;; [accum, output, i, numer, denom]
 swap4       ;; [denom, output, i, numer, accum]
 swap1       ;; [output, denom, i, numer, accum]
 div         ;; [output / denom, i , numer, accum]
+
+;; clean up stack
+swap3       ;; [accum, i, numer, result]
+pop         ;; [i, numer, result]
+pop         ;; [numer, result]
+pop         ;; [result]
