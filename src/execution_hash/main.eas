@@ -49,8 +49,8 @@
   %do_revert()      ;; []
 
 load:
-  ;; Check if input is requesting a block hash greater than current block
-  ;; number.
+  ;; Check if input is requesting a block hash greater than current block number
+  ;; minus 1.
   push 0            ;; [0]
   calldataload      ;; [input]
   push 1            ;; [1, input]
@@ -62,13 +62,11 @@ load:
 
   ;; Check if the input is requesting a block hash before the earliest available
   ;; hash currently. Since we've verfied that input <= number - 1, it's safe to
-  ;; check the following:
-  ;; number - 1 - input <= BUFLEN, which also equals: number - input < BUFLEN
-  dup1              ;; [input, input]
-  number            ;; [number, input, input]
-  sub               ;; [number - input, input]
-  push BUFLEN+1     ;; [buflen, number - input, input]
-  lt                ;; [buflen < number - input, input]
+  push BUFLEN       ;; [buflen, input]
+  dup2              ;; [input, buflen, input]
+  number            ;; [number, input, buflen, input]
+  sub               ;; [number - input, buflen, input]
+  gt                ;; [number - input > buflen, input]
   jumpi @throw      ;; [input]
 
   ;; Load the hash.

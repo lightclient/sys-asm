@@ -64,13 +64,18 @@ contract ContractTest is Test {
         // Store hash at expected indexes.
         vm.store(unit, hash_idx(), hash);
 
+        // Request current block.
+        (bool ret, bytes memory data) = unit.call(bytes.concat(bytes32(block.number)));
+        assertFalse(ret);
+        assertEq(data, hex"");
+
         // Wrap around buflen once forward.
-        (bool ret, bytes memory data) = unit.call(bytes.concat(bytes32(number+buflen)));
+        (ret, data) = unit.call(bytes.concat(bytes32(number+buflen)));
         assertFalse(ret);
         assertEq(data, hex"");
 
         // Wrap around buflen once backward.
-        (ret, data) = unit.call(bytes.concat(bytes32(number-buflen-1)));
+        (ret, data) = unit.call(bytes.concat(bytes32(number-buflen)));
         assertFalse(ret);
         assertEq(data, hex"");
 
@@ -134,12 +139,19 @@ contract ContractTest is Test {
             (bool ret, bytes memory data) = unit.call(bytes.concat(pbbr));
             assertTrue(ret);
             assertEq(data, hex"");
-            vm.roll(block.number+1);
+            if (i+1 < buflen) {
+              // Only bump block number if not last iteration.
+              vm.roll(block.number+1);
+            }
         }
+
+        // Begin reading before start block, since roots are written for
+        // previous.
+        uint256 base = start-1;
 
         // Attempt to read all values in same block context.
         for (uint256 i = 0; i < buflen; i += 1) {
-            bytes32 num = bytes32(uint256(start+i-1));
+            bytes32 num = bytes32(uint256(base+i));
             (bool ret, bytes memory got) = unit.call(bytes.concat(num));
             assertTrue(ret);
             assertEq(got, bytes.concat(bytes32(i*1337)));
