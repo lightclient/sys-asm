@@ -22,16 +22,17 @@
 ;; buflen to the timestamp's index in the first ring buffer. The sum will be
 ;; the storage slot in the second ring buffer where it is stored.
 
+#pragma target "cancun"
 
 ;; ----------------------------------------------------------------------------
 ;; MACROS ---------------------------------------------------------------------
 ;; ----------------------------------------------------------------------------
 
 ;; BUFLEN returns the HISTORY_BUFFER_LENGTH as defined in the EIP.
-#define BUFLEN 8191
+#define BUFLEN = 8191
 
 ;; SYSADDR is the address which calls the contract to submit a new root.
-#define SYSADDR 0xfffffffffffffffffffffffffffffffffffffffe
+#define SYSADDR = .address(0xfffffffffffffffffffffffffffffffffffffffe)
 
 ;; do_revert sets up and then executes a revert(0,0) operation.
 #define %do_revert() {
@@ -44,7 +45,6 @@
 ;; MACROS END -----------------------------------------------------------------
 ;; ----------------------------------------------------------------------------
 
-.start:
   ;; Protect the submit routine by verifying the caller is equal to
   ;; sysaddr().
   caller           ;; [caller]
