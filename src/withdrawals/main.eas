@@ -17,34 +17,35 @@
 ;; being processed by the beacon chain is the validity verified. The fee is used
 ;; to avoid spamming of the withdrawal requests queue.
 
+#pragma target "prague"
+
 ;; -----------------------------------------------------------------------------
 ;; CONSTANTS -------------------------------------------------------------------
 ;; -----------------------------------------------------------------------------
 
-#define SYSTEM_ADDR 0xfffffffffffffffffffffffffffffffffffffffe
+#define SYSTEM_ADDR = .address(0xfffffffffffffffffffffffffffffffffffffffe)
 
-#define SLOT_EXCESS 0
-#define SLOT_COUNT 1
+#define SLOT_EXCESS = 0
+#define SLOT_COUNT = 1
 
-#define QUEUE_HEAD 2
-#define QUEUE_TAIL 3
-#define QUEUE_OFFSET 4
+#define QUEUE_HEAD = 2
+#define QUEUE_TAIL = 3
+#define QUEUE_OFFSET = 4
 
-#define MIN_FEE 1
-#define TARGET_PER_BLOCK 2
-#define MAX_PER_BLOCK 16
-#define FEE_UPDATE_FRACTION 17
-#define EXCESS_INHIBITOR 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+#define MIN_FEE = 1
+#define TARGET_PER_BLOCK = 2
+#define MAX_PER_BLOCK = 16
+#define FEE_UPDATE_FRACTION = 17
+#define EXCESS_INHIBITOR = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
 
-#define INPUT_SIZE 56   ;; the size of (pubkey ++ amount)
-#define RECORD_SIZE 76  ;; the size of (address ++ pubkey ++ amount)
-#define SLOTS_PER_ITEM 3 ;; (address, pubkey[0:32], pubkey[32:48] ++ amount)
+#define INPUT_SIZE = 56    ;; the size of (pubkey ++ amount)
+#define RECORD_SIZE = 76   ;; the size of (address ++ pubkey ++ amount)
+#define SLOTS_PER_ITEM = 3 ;; (address, pubkey[0:32], pubkey[32:48] ++ amount)
 
 ;; ----------------------------------------------------------------------------
 ;; PROGRAM START --------------------------------------------------------------
 ;; ----------------------------------------------------------------------------
 
-.start:
   ;; Protect the system subroutine by checking if the caller is the system
   ;; address.
   caller                ;; [caller]
@@ -422,7 +423,7 @@ revert:
 ;; ----------------------------------------------------------------------------
 
 ;; This defines a mask for accessing the top 16 bytes of a number.
-#define pk2_mask 0xffffffffffffffffffffffffffffffff00000000000000000000000000000000
+#define pk2_mask = 0xffffffffffffffffffffffffffffffff00000000000000000000000000000000
 
 ;; Helper for storing little-endian amount.
 #define %mstore_uint64_le() { ;; [offset, value]

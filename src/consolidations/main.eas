@@ -2,7 +2,7 @@
 ;;    ▐▌   █ █    █ ▝▚▄▟▌▀▄▄  ▄▄▄▄
 ;;    ▐▌█▀▀▀ ▀▀▀█ █      ▄▄▄▀ █ █ █
 ;;    ▐▌█▄▄▄ ▄▄▄█ █           █   █
-
+;;
 ;; This is an implementation of EIP-7251 style contract handling EL triggerred
 ;; consolidations. It leverages on the fee mechanism and the queue design of the
 ;; original EIP-7002 smart contract implementation. Therefore, the subroutines
@@ -11,35 +11,35 @@
 ;; The difference from the EIP-7002 smart contract is in input data, the size of
 ;; the queue item, target and max block parameters.
 
+#pragma target "prague"
+
 ;; ----------------------------------------------------------------------------
 ;; CONSTANTS ------------------------------------------------------------------
 ;; ----------------------------------------------------------------------------
 
-#define SYSTEM_ADDR 0xfffffffffffffffffffffffffffffffffffffffe
+#define SYSTEM_ADDR = .address(0xfffffffffffffffffffffffffffffffffffffffe)
 
-#define SLOT_EXCESS 0
-#define SLOT_COUNT 1
+#define SLOT_EXCESS = 0
+#define SLOT_COUNT = 1
 
-#define QUEUE_HEAD 2
-#define QUEUE_TAIL 3
-#define QUEUE_OFFSET 4
+#define QUEUE_HEAD = 2
+#define QUEUE_TAIL  = 3
+#define QUEUE_OFFSET = 4
 
+#define MIN_FEE = 1
+#define TARGET_PER_BLOCK = 1
+#define MAX_PER_BLOCK = 1
+#define FEE_UPDATE_FRACTION = 17
+#define EXCESS_INHIBITOR = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
 
-#define MIN_FEE 1
-#define TARGET_PER_BLOCK 1
-#define MAX_PER_BLOCK 1
-#define FEE_UPDATE_FRACTION 17
-#define EXCESS_INHIBITOR 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
-
-#define INPUT_SIZE 96    ;; the size of (source ++ target)
-#define RECORD_SIZE 116  ;; the size of (address ++ source ++ target)
-#define SLOTS_PER_ITEM 4 ;; (addr, src[0:32], src[32:48]+tgt[0:16], tgt[16:48])
+#define INPUT_SIZE = 96    ;; the size of (source ++ target)
+#define RECORD_SIZE = 116  ;; the size of (address ++ source ++ target)
+#define SLOTS_PER_ITEM = 4 ;; (addr, src[0:32], src[32:48]+tgt[0:16], tgt[16:48])
 
 ;; ----------------------------------------------------------------------------
 ;; PROGRAM START --------------------------------------------------------------
 ;; ----------------------------------------------------------------------------
 
-.start:
   ;; Protect the system subroutine by checking if the caller is the system
   ;; address.
   caller                ;; [caller]
