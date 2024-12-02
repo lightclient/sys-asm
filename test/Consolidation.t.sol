@@ -5,7 +5,7 @@ import "geas-ffi/Geas.sol";
 import "./Test.sol";
 
 uint256 constant target_per_block = 1;
-uint256 constant max_per_block = 1;
+uint256 constant max_per_block = 2;
 uint256 constant inhibitor = uint256(bytes32(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff));
 
 contract ConsolidationTest is Test {
@@ -63,7 +63,7 @@ contract ConsolidationTest is Test {
   // request than can be read per block, the queue is eventually cleared and the
   // head and tails are reset to zero.
   function testQueueReset() public {
-    // Add more requests than the max per block (1) so that the queue is not
+    // Add more requests than the max per block (2) so that the queue is not
     // immediately emptied.
     for (uint256 i = 0; i < max_per_block+1; i++) {
       addRequest(address(uint160(i)), makeConsolidation(i), 2);
@@ -72,21 +72,21 @@ contract ConsolidationTest is Test {
 
     // Simulate syscall, check that max requests per block are read.
     checkConsolidations(0, max_per_block);
-    assertExcess(1);
+    assertExcess(2);
 
-    // Add another batch of max requests per block (1) so the next read leaves a
+    // Add another batch of max requests per block (2) so the next read leaves a
     // single request in the queue.
-    for (uint256 i = 2; i < 3; i++) {
+    for (uint256 i = 3; i < 3 + max_per_block; i++) {
       addRequest(address(uint160(i)), makeConsolidation(i), 2);
     }
     assertStorage(count_slot, max_per_block, "unexpected request count");
 
     // Simulate syscall. Verify first that max per block are read. Then
-    // verify only the single final requst is read.
-    checkConsolidations(1, max_per_block);
-    assertExcess(1);
-    checkConsolidations(2, 1);
-    assertExcess(0);
+    // verify only the single final request is read.
+    checkConsolidations(2, max_per_block);
+    assertExcess(3);
+    checkConsolidations(4, 1);
+    assertExcess(2);
 
     // Now ensure the queue is empty and has reset to zero.
     assertStorage(queue_head_slot, 0, "expected queue head reset");
@@ -94,14 +94,14 @@ contract ConsolidationTest is Test {
 
     // Add five (5) more requests to check that new requests can be added after the queue
     // is reset.
-    for (uint256 i = 3; i < 8; i++) {
+    for (uint256 i = 5; i < 10; i++) {
       addRequest(address(uint160(i)), makeConsolidation(i), 4);
     }
     assertStorage(count_slot, 5, "unexpected request count");
 
     // Simulate syscall, read only the max requests per block.
-    checkConsolidations(3, 1);
-    assertExcess(4);
+    checkConsolidations(5, max_per_block);
+    assertExcess(6);
   }
 
   // testFee adds many requests, and verifies the fee decreases correctly until
@@ -127,20 +127,23 @@ contract ConsolidationTest is Test {
       assertExcess(excess);
       
       uint256 fee = computeFee(excess);
-      if (idx % 2 == 0) {
+      bool success = (i % 2 == 0);
+      if (success) {
         addRequest(address(uint160(idx)), makeConsolidation(idx), fee);
+        // Bump index when a new request is created
+        idx++;
       } else {
         addFailedRequest(address(uint160(idx)), makeConsolidation(idx), fee-1);
       }
       
-      uint256 expected = min(idx-read+1, max_per_block);
+      uint256 queue_size = idx - read;
+      uint256 expected = min(queue_size, max_per_block);
       checkConsolidations(read, expected);
 
-      if (excess > 0 && idx % 2 != 0) {
+      if (excess > 0 && !success) {
         excess--;
       }
       read += expected;
-      idx++;
     }
 
   }
