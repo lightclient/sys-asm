@@ -7,21 +7,22 @@
 ;; The contract implements a ring buffer to create bounded execution block hash
 ;; lookup. 
 
+#pragma target "prague"
+
 ;; ----------------------------------------------------------------------------
 ;; MACROS ---------------------------------------------------------------------
 ;; ----------------------------------------------------------------------------
 
 ;; BUFLEN returns the HISTORY_BUFFER_LENGTH as defined in the EIP.
-#define BUFLEN 8191
+#define BUFLEN = 8191
 
 ;; SYSADDR is the address which calls the contract to submit a new block hash.
-#define SYSADDR 0xfffffffffffffffffffffffffffffffffffffffe
+#define SYSADDR = .address(0xfffffffffffffffffffffffffffffffffffffffe)
 
 ;; ----------------------------------------------------------------------------
 ;; MACROS END -----------------------------------------------------------------
 ;; ----------------------------------------------------------------------------
 
-.start:
   ;; Protect the submit routine by verifying the caller is equal to
   ;; sysaddr().
   caller            ;; [caller]
