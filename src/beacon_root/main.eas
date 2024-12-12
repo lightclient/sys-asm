@@ -50,8 +50,7 @@
   caller           ;; [caller]
   push SYSADDR     ;; [sysaddr, caller]
   eq               ;; [sysaddr == caller]
-  push @submit     ;; [submit_lbl, sysaddr == caller]
-  jumpi            ;; []
+  jumpi @submit    ;; []
 
   ;; Fallthrough if addresses don't match -- this means the caller intends
   ;; to read a root.
@@ -62,8 +61,7 @@
   eq               ;; [calldatasize == 32]
 
   ;; Jump to continue if length-check passed, otherwise revert.
-  push @loadtime   ;; [loadtime_lbl, calldatasize == 32]
-  jumpi            ;; []
+  jumpi @loadtime  ;; []
   %do_revert()     ;; []
 
 loadtime:
@@ -74,8 +72,7 @@ loadtime:
 
   ;; Verify input timestamp is non-zero.
   iszero           ;; [input_timestamp == 0, input_timestamp]
-  push @throw      ;; [throw_lbl, input_timestamp == 0, input_timestamp]
-  jumpi            ;; [input_timestamp]
+  jumpi @throw     ;; [input_timestamp]
 
   ;; Compute the timestamp index and load from storage.
   push BUFLEN      ;; [buflen, input_timestamp]
@@ -89,8 +86,7 @@ loadtime:
   ;; don't match if the slot has been overwritten by the ring buffer or if
   ;; the timestamp input wasn't a valid previous timestamp.
   eq               ;; [stored_timestamp == input_timestamp, time_index]
-  push @loadroot   ;; [loadroot_lbl, input == timestamp, time_index]
-  jumpi            ;; [time_index]
+  jumpi @loadroot  ;; [time_index]
   %do_revert()     ;; []
 
 loadroot:
