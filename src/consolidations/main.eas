@@ -296,9 +296,9 @@ accum_loop:
   push 32               ;; [32, offset, slotbase, ..]
   add                   ;; [offset=offset+32, slotbase, ..]
 
-  ;; Read slot 'spk2_tpk1' from stoarge.
+  ;; Read slot 'spk2_tpk1' from storage.
   dup2                  ;; [slotbase, offset, slotbase, ..]
-  push 2                ;; [1, slotbase, offset, slotbase, ..]
+  push 2                ;; [2, slotbase, offset, slotbase, ..]
   add                   ;; [slot, offset, slotbase, ..]
   sload                 ;; [spk2_tpk1, offset, slotbase, ..]
 

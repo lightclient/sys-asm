@@ -53,7 +53,8 @@
   jumpi @throw      ;; [input]
 
   ;; Check if the input is requesting a block hash before the earliest available
-  ;; hash currently. Since we've verfied that input <= number - 1, it's safe to
+  ;; hash currently. Since we've verified that input <= number - 1, we know
+  ;; there will be no overflow during the subtraction of number - input.
   push BUFLEN       ;; [buflen, input]
   dup2              ;; [input, buflen, input]
   number            ;; [number, input, buflen, input]
